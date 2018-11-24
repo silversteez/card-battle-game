@@ -107,12 +107,21 @@ export default class AppStore {
   }
 
   @computed
+  get playerIndexInGameData() {
+    return this.gameData.users ? this.gameData.users.indexOf(this.userId) : null;
+  }
+
+  @computed
+  get enemyIndexInGameData() {
+      return this.playerIndexInGameData === 0 ? 1 : 0;
+  }
+
+  @computed
   get playerKey() {
     if (this.gameData.users) {
-      const myUserIndexInGameData = this.gameData.users.indexOf(this.userId);
-      if (myUserIndexInGameData === 0) {
+      if (this.playerIndexInGameData === 0) {
         return "player1"
-      } else if (myUserIndexInGameData === 1) {
+      } else if (this.playerIndexInGameData === 1) {
         return "player2"
       }
     }
@@ -127,6 +136,11 @@ export default class AppStore {
         return "player1"
       }
       return null;
+  }
+
+  @computed
+  get hasControl() {
+    return this.gameData.state === "active" && this.gameData.hasControl === this.gameData.users.indexOf(this.userId);
   }
 
   @action.bound
@@ -152,12 +166,15 @@ export default class AppStore {
     this.gameRef.update({
         [this.enemyKey]: {
           life: this.gameData[this.enemyKey].life - 5
-        }
+        },
+        hasControl: this.enemyIndexInGameData
     });
   }
 
   @action.bound
   passTurn() {
-
+      this.gameRef.update({
+          hasControl: this.enemyIndexInGameData
+      });
   }
 }

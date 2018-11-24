@@ -53,8 +53,12 @@ const Lobby = () => {
 const Arena = () => {
   return (
     <Fragment>
-      <button onClick={app.attack}>ATTACK</button>
-      <button onClick={app.passTurn}>PASS</button>
+        {app.hasControl &&
+        <Fragment>
+            <button onClick={app.attack}>ATTACK</button>
+            <button onClick={app.passTurn}>PASS</button>
+        </Fragment>
+        }
       <button onClick={app.concedeGame}>CONCEDE</button>
     </Fragment>
   );
