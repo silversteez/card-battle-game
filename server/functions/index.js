@@ -56,7 +56,21 @@ exports.updateUser = functions.firestore
                         // no game was found, create a new game with the player
                         const users = [userId];
                         const gameRef = db.collection('games').doc();
-                        trs.set(gameRef, {full: false, users: users});
+                        trs.set(gameRef, {
+                            full: false,
+                            users: users,
+                            hasControl: 0,
+                            player1: {
+                                life: 30,
+                                mana: 1
+                            },
+                            player2: {
+                                life: 30,
+                                mana: 1
+                            },
+                            history: [],
+                            state: "active"
+                        });
                         gameId = gameRef.id;
                     }
                     // then add a reference to the game in the player document
