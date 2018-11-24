@@ -1,5 +1,5 @@
 import firebase from "firebase";
-import { observable, action, autorun } from "mobx";
+import { observable, action, computed, autorun } from "mobx";
 import c from "./constants";
 
 export default class AppStore {
@@ -106,6 +106,29 @@ export default class AppStore {
     );
   }
 
+  @computed
+  get playerKey() {
+    if (this.gameData.users) {
+      const myUserIndexInGameData = this.gameData.users.indexOf(this.userId);
+      if (myUserIndexInGameData === 0) {
+        return "player1"
+      } else if (myUserIndexInGameData === 1) {
+        return "player2"
+      }
+    }
+    return null;
+  }
+
+  @computed
+  get enemyKey() {
+      if (this.playerKey === "player1") {
+        return "player2"
+      } else if (this.playerKey === "player2") {
+        return "player1"
+      }
+      return null;
+  }
+
   @action.bound
   findGame() {
     this.gameState = c.gameStates.FINDING;
@@ -114,6 +137,7 @@ export default class AppStore {
     });
   }
 
+  // TODO update to concede
   @action.bound
   leaveGame() {
     this.gameState = c.gameStates.NONE;
@@ -121,5 +145,19 @@ export default class AppStore {
       state: "menu",
       gameId: null
     });
+  }
+
+  @action.bound
+  attack() {
+    this.gameRef.update({
+        [this.enemyKey]: {
+          life: this.gameData[this.enemyKey].life - 5
+        }
+    });
+  }
+
+  @action.bound
+  passTurn() {
+
   }
 }
