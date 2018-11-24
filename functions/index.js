@@ -4,24 +4,44 @@ admin.initializeApp();
 
 exports.updateUser = functions.firestore
     .document('users/{userId}')
-    .onUpdate((change, context) => {
+    .onUpdate( (change, context) => {
         const userId = context.params.userId;
 
         const data = change.after.data();
         const previousData = change.before.data();
-        
+
         // This is crucial to prevent infinite loops.
         if (data.state === previousData.state) return null;
 
         // Only care about searching for now
         if (data.state !== "searching") return null;
-        
+
         const db = admin.firestore();
-        return db.runTransaction( trs => {
+        return db.runTransaction(async trs => {
+
+            const foundExistingGame = await trs.get(db.collection('games')
+                .where('users', 'array-contains', userId)
+                .limit(1))
+                .then(gameResult => {
+                    if (gameResult.size === 1) {
+                        const gameSnapshot = gameResult.docs[0];
+                        const gameId = gameSnapshot.id;
+                        //  add a reference to the game in the player document
+                        trs.update(db.collection('users').doc(userId), {gameId: gameId, state: 'found_game'});
+                        console.log('FOUND GAME!');
+                        return true;
+                    }
+                    return null;
+                });
+
+            if (foundExistingGame) {
+                return null;
+            }
+
             return trs.get(db.collection('games')
                 .where('full', '==', false)
                 .limit(1))
-                .then( gameResult => {
+                .then(gameResult => {
                     let gameId;
                     if (gameResult.size === 1) {
                         // a game was found, add the player to it
@@ -29,19 +49,18 @@ exports.updateUser = functions.firestore
                         const game = gameSnapshot.data();
                         const users = game.users.concat([userId]);
                         const full = users.length === 2;
-                        const newGameData = { full: full, users: users };
+                        const newGameData = {full: full, users: users};
                         trs.set(gameSnapshot.ref, newGameData);
                         gameId = gameSnapshot.id;
-                    }
-                    else {
+                    } else {
                         // no game was found, create a new game with the player
                         const users = [userId];
                         const gameRef = db.collection('games').doc();
-                        trs.set(gameRef, { full: false, users: users });
+                        trs.set(gameRef, {full: false, users: users});
                         gameId = gameRef.id;
                     }
                     // then add a reference to the game in the player document
-                    return trs.update(db.collection('users').doc(userId), { gameId: gameId, state: 'found_game' });
+                    return trs.update(db.collection('users').doc(userId), {gameId: gameId, state: 'found_game'});
                 });
         });
     });
