@@ -50,7 +50,7 @@ exports.updateUser = functions.firestore
                         const users = game.users.concat([userId]);
                         const full = users.length === 2;
                         const newGameData = {full: full, users: users};
-                        trs.set(gameSnapshot.ref, newGameData);
+                        trs.update(gameSnapshot.ref, newGameData);
                         gameId = gameSnapshot.id;
                     } else {
                         // no game was found, create a new game with the player
