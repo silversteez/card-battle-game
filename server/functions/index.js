@@ -14,12 +14,14 @@ exports.onGameUpdate = functions.firestore
 
     const db = admin.firestore();
     return db.runTransaction(async trs => {
+      const transactions = [];
       const update = gameData.gameUpdateToCommit;
-      const playerKey = gameData.hasControl === 0 ? "player1" : "player2";
-      const enemyKey = gameData.hasControl === 0 ? "player2" : "player1";
+      const playerKey = gameData.hasControl;
+      const enemyKey = playerKey === "player1" ? "player2" : "player1";
       const playerData = gameData[playerKey];
       const enemyData = gameData[enemyKey];
       const history = gameData.history;
+      let state = gameData.state;
 
       // Update swapControl when needed
       let swapControl = false;
@@ -34,22 +36,42 @@ exports.onGameUpdate = functions.firestore
         swapControl = true;
       }
 
+      if (update.action === "exit_game") {
+        playerData.didExit = true;
+      }
+
       // Update control
       if (swapControl) {
-        hasControl = hasControl === 0 ? 1 : 0;
+        hasControl = hasControl === "player1" ? "player2" : "player1";
       }
 
       // Update history
       update.player = playerKey;
       history.push(update);
 
-      return trs.update(change.after.ref, {
+      // Check for game end
+      if (state !== "complete" && (playerData.life <= 0 || enemyData.life <= 0)) {
+        state = "complete";
+        playerData.didWin = playerData.life > 0;
+        enemyData.didWin = enemyData.life > 0;
+        transactions.push(trs.update(db.collection("users").doc(playerData.id), {
+            state: playerData.didWin ? "game_victory" : "game_loss"
+        }));
+        transactions.push(trs.update(db.collection("users").doc(enemyData.id), {
+          state: enemyData.didWin ? "game_victory" : "game_loss"
+        }));
+      }
+
+      transactions.push(trs.update(change.after.ref, {
         player1: playerKey === "player1" ? playerData : enemyData,
         player2: playerKey === "player2" ? playerData : enemyData,
         hasControl,
         history,
+        state,
         gameUpdateToCommit: null
-      });
+      }));
+
+      return Promise.all(transactions);
     });
   });
 
@@ -74,6 +96,7 @@ exports.updateUser = functions.firestore
           db
             .collection("games")
             .where("users", "array-contains", userId)
+            .where("state", "==", "active")
             .limit(1)
         )
         .then(gameResult => {
@@ -110,7 +133,13 @@ exports.updateUser = functions.firestore
             const game = gameSnapshot.data();
             const users = game.users.concat([userId]);
             const full = users.length === 2;
-            const newGameData = { full: full, users: users };
+            const player2 = Object.assign(game.player2, {id: userId});
+            const newGameData = {
+              full,
+              users,
+              player2,
+              state: "active"
+            };
             trs.update(gameSnapshot.ref, newGameData);
             gameId = gameSnapshot.id;
           } else {
@@ -120,17 +149,19 @@ exports.updateUser = functions.firestore
             trs.set(gameRef, {
               full: false,
               users: users,
-              hasControl: 0,
+              hasControl: "player1",
               player1: {
+                id: userId,
                 life: 30,
                 mana: 1
               },
               player2: {
+                id: null,
                 life: 30,
                 mana: 1
               },
               history: [],
-              state: "active",
+              state: "matchmaking",
               gameUpdateToCommit: null
             });
             gameId = gameRef.id;
@@ -143,50 +174,3 @@ exports.updateUser = functions.firestore
         });
     });
   });
-
-// // Create and Deploy Your First Cloud Functions
-// // https://firebase.google.com/docs/functions/write-firebase-functions
-
-// Listen for updates to any `user` document.
-// exports.updateUser = functions.firestore
-//     .document('users/{userId}')
-//     .onUpdate((change, context) => {
-//         // Retrieve the current and previous value
-//         const data = change.after.data();
-//         const previousData = change.before.data();
-//
-//         console.log('context is', context);
-//         console.log('data is', data);
-//
-//         // This is crucial to prevent infinite loops.
-//         if (data.state === previousData.state) return null;
-//
-//         // Only care about searching for now
-//         if (data.state !== "searching") return null;
-//
-//         console.log('ok, searching...');
-//
-//         admin.firestore().collection('users').onSnapshot(querySnapshot => {
-//             let user;
-//             if (querySnapshot.empty) {
-//              console.log('its empty!');
-//             }
-//             console.log('querysnapshot is', querySnapshot);
-//             querySnapshot.forEach(doc => {
-//                 user = doc.data();
-//                 console.log('doc uid is', doc.uid);
-//                 console.log('doc id is', doc.id);
-//                 console.log('user is', user);
-//                 admin.firestore().collection('games').add({
-//                     player1: context.params.userId,
-//                     player2: doc.id
-//                 })
-//             });
-//          });
-//
-//
-//         // Then return a promise of a set operation to update the count
-//         return change.after.ref.set({
-//             state: 'found_game'
-//         }, {merge: true});
-//     });

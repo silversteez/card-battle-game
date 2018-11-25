@@ -1,5 +1,5 @@
 import firebase from "firebase";
-import { observable, action, computed, autorun } from "mobx";
+import { observable, action, computed, autorun, toJS } from "mobx";
 import c from "./constants";
 
 export default class AppStore {
@@ -32,7 +32,7 @@ export default class AppStore {
     // AUTH
     firebase.auth().onAuthStateChanged(async user => {
       if (user) {
-        const isAnonymous = user.isAnonymous;
+        // const isAnonymous = user.isAnonymous;
         this.userId = user.uid;
         console.log("signed in!", this.userId);
 
@@ -84,7 +84,7 @@ export default class AppStore {
     this.unsubToUser = this.userRef.onSnapshot(
       action(doc => {
         this.userData = doc.data();
-        console.log("userData is", this.userData);
+        console.log("userData is", toJS(this.userData));
       })
     );
   }
@@ -94,6 +94,7 @@ export default class AppStore {
       this.unsubToGame();
     }
     if (!this.userData.gameId) {
+      this.gameData = {};
       return;
     }
     console.log("gameId is", this.userData.gameId);
@@ -101,41 +102,41 @@ export default class AppStore {
     this.unsubToGame = this.gameRef.onSnapshot(
       action(doc => {
         this.gameData = doc.data();
-        console.log("gameData is", this.gameData);
+        console.log("gameData is", toJS(this.gameData));
       })
     );
   }
 
   @computed
-  get playerIndexInGameData() {
-    return this.gameData.users
-      ? this.gameData.users.indexOf(this.userId)
-      : null;
-  }
-
-  @computed
-  get enemyIndexInGameData() {
-    return this.playerIndexInGameData === 0 ? 1 : 0;
-  }
-
-  @computed
-  get playerKey() {
-    if (this.gameData.users) {
-      if (this.playerIndexInGameData === 0) {
-        return "player1";
-      } else if (this.playerIndexInGameData === 1) {
-        return "player2";
+  get playerData() {
+    if (this.gameData.player1) {
+      if (this.gameData.player1.id === this.userId) {
+        return this.gameData.player1;
+      } else if (this.gameData.player2.id === this.userId) {
+        return this.gameData.player2;
+      } else {
+        throw new Error('Neither player id matches userId!')
       }
     }
     return null;
   }
 
   @computed
-  get enemyKey() {
-    if (this.playerKey === "player1") {
-      return "player2";
-    } else if (this.playerKey === "player2") {
-      return "player1";
+  get enemyData() {
+    if (this.playerData === this.gameData.player1) {
+      return this.gameData.player2;
+    } else if (this.playerData === this.gameData.player2) {
+      return this.gameData.player1;
+    }
+    return null;
+  }
+
+  @computed
+  get playerKey() {
+    if (this.playerData === this.gameData.player1) {
+      return "player1"
+    } else if (this.playerData === this.gameData.player2) {
+      return "player2"
     }
     return null;
   }
@@ -144,7 +145,7 @@ export default class AppStore {
   get hasControl() {
     return (
       this.gameData.state === "active" &&
-      this.gameData.hasControl === this.gameData.users.indexOf(this.userId)
+      this.gameData.hasControl === this.playerKey
     );
   }
 
@@ -168,6 +169,19 @@ export default class AppStore {
     this.userRef.update({
       state: "menu",
       gameId: null
+    });
+  }
+
+  @action.bound
+  exitCompleteGame() {
+    this.userRef.update({
+      state: "menu",
+      gameId: null
+    });
+    this.gameRef.update({
+      gameUpdateToCommit: {
+        action: "exit_game"
+      }
     });
   }
 

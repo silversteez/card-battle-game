@@ -1,4 +1,4 @@
-import React, { Component, Fragment } from "react";
+import React, { Fragment } from "react";
 import ReactDOM from "react-dom";
 import AppStore from "./appStore";
 import { observer } from "mobx-react";
@@ -56,11 +56,22 @@ const Arena = () => {
     <Fragment>
       {app.hasControl && (
         <Fragment>
-          <button onClick={app.attack} disabled={disabled}>ATTACK</button>
-          <button onClick={app.passTurn} disabled={disabled}>PASS</button>
+          <button onClick={app.attack} disabled={disabled}>
+            ATTACK
+          </button>
+          <button onClick={app.passTurn} disabled={disabled}>
+            PASS
+          </button>
         </Fragment>
       )}
-      <button onClick={app.concedeGame} disabled={disabled}>CONCEDE</button>
+      {app.gameData.state === "complete" && (
+        <Fragment>
+          <div>{app.playerData.didWin ? "YOU WON!!!" : "YOU LOST!!!"}</div>
+          <button onClick={app.exitCompleteGame} disabled={disabled}>
+            EXIT GAME
+          </button>
+        </Fragment>
+      )}
     </Fragment>
   );
 };
@@ -69,7 +80,7 @@ const Main = observer(() => {
   return (
     <Fragment>
       {!app.gameData.state && <Lobby />}
-      {app.gameData.state === "active" && <Arena />}
+      {(app.gameData.state === "active" || app.gameData.state === "complete")  && <Arena />}
       <Divider />
       <JSON json={app.userData} />
       <Divider />
