@@ -115,7 +115,7 @@ export default class AppStore {
       } else if (this.gameData.player2.id === this.userId) {
         return this.gameData.player2;
       } else {
-        throw new Error('Neither player id matches userId!')
+        throw new Error("Neither player id matches userId!");
       }
     }
     return null;
@@ -134,9 +134,9 @@ export default class AppStore {
   @computed
   get playerKey() {
     if (this.playerData === this.gameData.player1) {
-      return "player1"
+      return "player1";
     } else if (this.playerData === this.gameData.player2) {
-      return "player2"
+      return "player2";
     }
     return null;
   }
@@ -144,9 +144,31 @@ export default class AppStore {
   @computed
   get hasControl() {
     return (
-      this.gameData.state === "active" &&
+      this.gameIsActive &&
       this.gameData.hasControl === this.playerKey
     );
+  }
+
+  @computed
+  get gameIsActive() {
+    // Player ids ensures we're not still matchmaking
+    return (
+      this.gameData.state === "active" &&
+      this.playerData &&
+      this.playerData.id &&
+      this.enemyData &&
+      this.enemyData.id
+    );
+  }
+
+  @computed
+  get gameIsMatchmaking() {
+    return this.gameData.state === "active" && !this.gameIsActive;
+  }
+
+  @computed
+  get gameIsComplete() {
+    return this.gameData.state === "complete"
   }
 
   @computed

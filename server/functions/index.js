@@ -92,13 +92,11 @@ exports.updateUser = functions.firestore
     const db = admin.firestore();
     return db.runTransaction(async trs => {
       const foundExistingGame = await trs
-        .get(
-          db
+        .get(db
             .collection("games")
             .where("users", "array-contains", userId)
             .where("state", "==", "active")
-            .limit(1)
-        )
+            .limit(1))
         .then(gameResult => {
           if (gameResult.size === 1) {
             const gameSnapshot = gameResult.docs[0];
@@ -161,7 +159,7 @@ exports.updateUser = functions.firestore
                 mana: 1
               },
               history: [],
-              state: "matchmaking",
+              state: "active",
               gameUpdateToCommit: null
             });
             gameId = gameRef.id;
