@@ -42,10 +42,11 @@ const Divider = () => <div style={{ marginBottom: 15 }} />;
 const Lobby = () => {
   return (
     <Fragment>
-      <button onClick={app.findGame}>
-        {app.gameState === c.gameStates.NONE && "FIND GAME"}
-        {app.gameState === c.gameStates.FINDING && "SEARCHING..."}
-      </button>
+      {app.userData.state === "searching" ? (
+        <div>SEARCHING...</div>
+      ) : (
+        <button onClick={app.findGame}>FIND GAME</button>
+      )}
     </Fragment>
   );
 };
@@ -64,6 +65,7 @@ const Arena = () => {
           </button>
         </Fragment>
       )}
+      {!app.hasControl && <div>ENEMY TURN...</div>}
       {app.gameData.state === "complete" && (
         <Fragment>
           <div>{app.playerData.didWin ? "YOU WON!!!" : "YOU LOST!!!"}</div>
@@ -80,7 +82,8 @@ const Main = observer(() => {
   return (
     <Fragment>
       {!app.gameData.state && <Lobby />}
-      {(app.gameData.state === "active" || app.gameData.state === "complete")  && <Arena />}
+      {(app.gameData.state === "active" ||
+        app.gameData.state === "complete") && <Arena />}
       <Divider />
       <JSON json={app.userData} />
       <Divider />

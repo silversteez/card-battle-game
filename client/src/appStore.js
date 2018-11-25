@@ -156,7 +156,6 @@ export default class AppStore {
 
   @action.bound
   findGame() {
-    this.gameState = c.gameStates.FINDING;
     this.userRef.update({
       state: "searching"
     });
