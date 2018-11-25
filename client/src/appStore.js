@@ -108,21 +108,23 @@ export default class AppStore {
 
   @computed
   get playerIndexInGameData() {
-    return this.gameData.users ? this.gameData.users.indexOf(this.userId) : null;
+    return this.gameData.users
+      ? this.gameData.users.indexOf(this.userId)
+      : null;
   }
 
   @computed
   get enemyIndexInGameData() {
-      return this.playerIndexInGameData === 0 ? 1 : 0;
+    return this.playerIndexInGameData === 0 ? 1 : 0;
   }
 
   @computed
   get playerKey() {
     if (this.gameData.users) {
       if (this.playerIndexInGameData === 0) {
-        return "player1"
+        return "player1";
       } else if (this.playerIndexInGameData === 1) {
-        return "player2"
+        return "player2";
       }
     }
     return null;
@@ -130,17 +132,25 @@ export default class AppStore {
 
   @computed
   get enemyKey() {
-      if (this.playerKey === "player1") {
-        return "player2"
-      } else if (this.playerKey === "player2") {
-        return "player1"
-      }
-      return null;
+    if (this.playerKey === "player1") {
+      return "player2";
+    } else if (this.playerKey === "player2") {
+      return "player1";
+    }
+    return null;
   }
 
   @computed
   get hasControl() {
-    return this.gameData.state === "active" && this.gameData.hasControl === this.gameData.users.indexOf(this.userId);
+    return (
+      this.gameData.state === "active" &&
+      this.gameData.hasControl === this.gameData.users.indexOf(this.userId)
+    );
+  }
+
+  @computed
+  get isUpdatingGame() {
+    return this.gameData.gameUpdateToCommit !== null;
   }
 
   @action.bound
@@ -164,17 +174,18 @@ export default class AppStore {
   @action.bound
   attack() {
     this.gameRef.update({
-        [this.enemyKey]: {
-          life: this.gameData[this.enemyKey].life - 5
-        },
-        hasControl: this.enemyIndexInGameData
+      gameUpdateToCommit: {
+        action: "attack"
+      }
     });
   }
 
   @action.bound
   passTurn() {
-      this.gameRef.update({
-          hasControl: this.enemyIndexInGameData
-      });
+    this.gameRef.update({
+      gameUpdateToCommit: {
+        action: "pass_turn"
+      }
+    });
   }
 }

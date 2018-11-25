@@ -51,15 +51,16 @@ const Lobby = () => {
 };
 
 const Arena = () => {
+  const disabled = app.isUpdatingGame;
   return (
     <Fragment>
-        {app.hasControl &&
+      {app.hasControl && (
         <Fragment>
-            <button onClick={app.attack}>ATTACK</button>
-            <button onClick={app.passTurn}>PASS</button>
+          <button onClick={app.attack} disabled={disabled}>ATTACK</button>
+          <button onClick={app.passTurn} disabled={disabled}>PASS</button>
         </Fragment>
-        }
-      <button onClick={app.concedeGame}>CONCEDE</button>
+      )}
+      <button onClick={app.concedeGame} disabled={disabled}>CONCEDE</button>
     </Fragment>
   );
 };
