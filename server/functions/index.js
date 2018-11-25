@@ -4,10 +4,8 @@ admin.initializeApp();
 
 exports.onGameUpdate = functions.firestore
   .document("games/{gameId}")
-  .onUpdate((change, context) => {
-    // const gameId = context.params.gameId;
+  .onUpdate((change) => {
     const gameData = change.after.data();
-    // const previousData = change.before.data();
 
     // This is crucial to prevent infinite loops.
     if (gameData.gameUpdateToCommit === null) return null;
@@ -22,13 +20,14 @@ exports.onGameUpdate = functions.firestore
       const enemyData = gameData[enemyKey];
       const history = gameData.history;
       let state = gameData.state;
+      let controlTimeOut = gameData.controlTimeOut;
 
       // Update swapControl when needed
       let swapControl = false;
       let hasControl = gameData.hasControl;
 
       if (update.action === "attack") {
-        enemyData.life = enemyData.life - 10;
+        enemyData.life = enemyData.life - 15;
         swapControl = true;
       }
 
@@ -43,6 +42,9 @@ exports.onGameUpdate = functions.firestore
       // Update control
       if (swapControl) {
         hasControl = hasControl === "player1" ? "player2" : "player1";
+        const controlTimeLimit = 10;
+        const date = new Date();
+        controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
       }
 
       // Update history
@@ -66,6 +68,7 @@ exports.onGameUpdate = functions.firestore
         player1: playerKey === "player1" ? playerData : enemyData,
         player2: playerKey === "player2" ? playerData : enemyData,
         hasControl,
+        controlTimeOut,
         history,
         state,
         gameUpdateToCommit: null
@@ -87,7 +90,7 @@ exports.updateUser = functions.firestore
     if (data.state === previousData.state) return null;
 
     // Only care about searching for now
-    if (data.state !== "searching") return null;
+    if (data.state !== "searching" && data.state !== "attempt_reconnect") return null;
 
     const db = admin.firestore();
     return db.runTransaction(async trs => {
@@ -116,6 +119,14 @@ exports.updateUser = functions.firestore
         return null;
       }
 
+      // If we're attempting reconnect on app load and we didn't find a game, enter menu state
+      if (!foundExistingGame && data.state === "attempt_reconnect") {
+        console.log("No game to reconnect to, enter menu state!");
+        return trs.update(db.collection("users").doc(userId), {
+          state: "menu"
+        });
+      }
+
       return trs
         .get(
           db
@@ -132,10 +143,14 @@ exports.updateUser = functions.firestore
             const users = game.users.concat([userId]);
             const full = users.length === 2;
             const player2 = Object.assign(game.player2, {id: userId});
+            const controlTimeLimit = 10;
+            const date = new Date();
             const newGameData = {
               full,
               users,
               player2,
+              controlTimeLimit,
+              controlTimeOut: date.setSeconds(date.getSeconds() + controlTimeLimit),
               state: "active"
             };
             trs.update(gameSnapshot.ref, newGameData);
@@ -148,6 +163,8 @@ exports.updateUser = functions.firestore
               full: false,
               users: users,
               hasControl: "player1",
+              controlTimeLimit: null,
+              controlTimeOut: null,
               player1: {
                 id: userId,
                 life: 30,

@@ -51,12 +51,15 @@ const Lobby = () => {
   );
 };
 
+const Timer = observer(() => <div>TIMER: {app.controlTimeRemaining}</div>);
+
 const Arena = () => {
   const disabled = app.isUpdatingGame;
   return (
     <Fragment>
       {app.hasControl && (
         <Fragment>
+          <Timer/>
           <button onClick={app.attack} disabled={disabled}>
             ATTACK
           </button>

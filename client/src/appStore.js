@@ -7,6 +7,8 @@ export default class AppStore {
   @observable userData = {};
   @observable gameData = {};
   @observable gameState = c.gameStates.NONE;
+  @observable lastControlTimeout = null;
+  @observable controlTimeRemaining = null;
 
   constructor() {
     // Initialize Firebase
@@ -25,6 +27,8 @@ export default class AppStore {
     }
 
     const db = firebase.firestore();
+    const settings = { timestampsInSnapshots: true };
+    db.settings(settings);
 
     this.usersRef = db.collection("users");
     this.gamesRef = db.collection("games");
@@ -38,11 +42,12 @@ export default class AppStore {
 
         try {
           // Set initial user data
+          // First thing we do is attempt to reconnect to an existing game
           this.userRef = this.usersRef.doc(this.userId);
           await this.userRef.set({
             authType: "anonymous",
             name: null,
-            state: "menu"
+            state: "attempt_reconnect"
           });
 
           // Not sure if this will be useful...
@@ -75,6 +80,9 @@ export default class AppStore {
 
     // Update gameData whenever userData.gameId
     autorun(this.subscribeToGame.bind(this));
+
+    // Keep local timer updated
+    setInterval(this.decrementTimeRemaining, 1000);
   }
 
   subscribeToUser() {
@@ -105,6 +113,44 @@ export default class AppStore {
         console.log("gameData is", toJS(this.gameData));
       })
     );
+  }
+
+  @action.bound
+  decrementTimeRemaining() {
+    console.log('controlTimeRemaining is', this.controlTimeRemaining);
+
+    // Not in a game, return
+    if (!this.gameData.controlTimeOut) {
+      this.lastControlTimeout = null;
+      this.controlTimeRemaining = null;
+      return;
+    }
+
+    // Server updated timeout, reset countdown
+    if (
+      (this.gameData.controlTimeOut && this.lastControlTimeout === null) ||
+      this.gameData.controlTimeOut !== this.lastControlTimeout
+    ) {
+      this.lastControlTimeout = this.gameData.controlTimeOut;
+      this.controlTimeRemaining = this.gameData.controlTimeLimit;
+      return;
+    }
+
+    // request end of turn
+    if (this.controlTimeRemaining <= 0) {
+      // TODO to make this unhackable, switch logic to enemy requests turn end
+      if (this.hasControl) {
+        this.gameRef.update({
+          gameUpdateToCommit: {
+            action: "pass_turn"
+          }
+        });
+      }
+      return;
+    }
+
+    // Just decrement time
+    this.controlTimeRemaining = this.controlTimeRemaining - 1;
   }
 
   @computed
@@ -143,10 +189,7 @@ export default class AppStore {
 
   @computed
   get hasControl() {
-    return (
-      this.gameIsActive &&
-      this.gameData.hasControl === this.playerKey
-    );
+    return this.gameIsActive && this.gameData.hasControl === this.playerKey;
   }
 
   @computed
@@ -168,7 +211,7 @@ export default class AppStore {
 
   @computed
   get gameIsComplete() {
-    return this.gameData.state === "complete"
+    return this.gameData.state === "complete";
   }
 
   @computed
