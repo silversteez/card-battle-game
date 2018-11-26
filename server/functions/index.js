@@ -42,7 +42,7 @@ exports.onGameUpdate = functions.firestore
       // Update control
       if (swapControl) {
         hasControl = hasControl === "player1" ? "player2" : "player1";
-        const controlTimeLimit = 10;
+        const controlTimeLimit = 25;
         const date = new Date();
         controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
       }
@@ -61,6 +61,19 @@ exports.onGameUpdate = functions.firestore
         }));
         transactions.push(trs.update(db.collection("users").doc(enemyData.id), {
           state: enemyData.didWin ? "game_victory" : "game_loss"
+        }));
+      }
+
+      // Check for game end
+      else if (state !== "complete" && update.action === "concede") {
+        state = "complete";
+        playerData.didWin = false;
+        enemyData.didWin = true;
+        transactions.push(trs.update(db.collection("users").doc(playerData.id), {
+          state: "game_loss"
+        }));
+        transactions.push(trs.update(db.collection("users").doc(enemyData.id), {
+          state: "game_victory"
         }));
       }
 
@@ -143,7 +156,7 @@ exports.updateUser = functions.firestore
             const users = game.users.concat([userId]);
             const full = users.length === 2;
             const player2 = Object.assign(game.player2, {id: userId});
-            const controlTimeLimit = 10;
+            const controlTimeLimit = 25;
             const date = new Date();
             const newGameData = {
               full,

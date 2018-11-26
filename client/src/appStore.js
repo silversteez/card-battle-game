@@ -82,7 +82,7 @@ export default class AppStore {
     autorun(this.subscribeToGame.bind(this));
 
     // Keep local timer updated
-    setInterval(this.decrementTimeRemaining, 1000);
+    setInterval(this.decrementTimeRemaining, 100);
   }
 
   subscribeToUser() {
@@ -117,8 +117,6 @@ export default class AppStore {
 
   @action.bound
   decrementTimeRemaining() {
-    console.log('controlTimeRemaining is', this.controlTimeRemaining);
-
     // Not in a game, return
     if (!this.gameData.controlTimeOut) {
       this.lastControlTimeout = null;
@@ -150,7 +148,7 @@ export default class AppStore {
     }
 
     // Just decrement time
-    this.controlTimeRemaining = this.controlTimeRemaining - 1;
+    this.controlTimeRemaining = this.controlTimeRemaining - 0.1;
   }
 
   @computed
@@ -263,6 +261,15 @@ export default class AppStore {
     this.gameRef.update({
       gameUpdateToCommit: {
         action: "pass_turn"
+      }
+    });
+  }
+
+  @action.bound
+  concedeGame() {
+    this.gameRef.update({
+      gameUpdateToCommit: {
+        action: "concede"
       }
     });
   }
