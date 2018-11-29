@@ -1,3 +1,4 @@
+const { GAME, USER, ACTIONS } = require("./constants");
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -26,16 +27,16 @@ exports.onGameUpdate = functions.firestore
       let swapControl = false;
       let hasControl = gameData.hasControl;
 
-      if (update.action === "attack") {
+      if (update.action === ACTIONS.attack) {
         enemyData.life = enemyData.life - 15;
         swapControl = true;
       }
 
-      if (update.action === "pass_turn") {
+      if (update.action === ACTIONS.pass_turn) {
         swapControl = true;
       }
 
-      if (update.action === "exit_game") {
+      if (update.action === ACTIONS.exit_game) {
         playerData.didExit = true;
       }
 
@@ -52,8 +53,8 @@ exports.onGameUpdate = functions.firestore
       history.push(update);
 
       // Check for game end
-      if (state !== "complete" && (playerData.life <= 0 || enemyData.life <= 0)) {
-        state = "complete";
+      if (state !== GAME.complete && (playerData.life <= 0 || enemyData.life <= 0)) {
+        state = GAME.complete;
         playerData.didWin = playerData.life > 0;
         enemyData.didWin = enemyData.life > 0;
         transactions.push(trs.update(db.collection("users").doc(playerData.id), {
@@ -66,7 +67,7 @@ exports.onGameUpdate = functions.firestore
 
       // Check for game end
       else if (state !== "complete" && update.action === "concede") {
-        state = "complete";
+        state = GAME.complete;
         playerData.didWin = false;
         enemyData.didWin = true;
         transactions.push(trs.update(db.collection("users").doc(playerData.id), {
@@ -103,7 +104,7 @@ exports.updateUser = functions.firestore
     if (data.state === previousData.state) return null;
 
     // Only care about searching for now
-    if (data.state !== "searching" && data.state !== "attempt_reconnect") return null;
+    if (data.state !== USER.searching && data.state !== USER.attempt_reconnect) return null;
 
     const db = admin.firestore();
     return db.runTransaction(async trs => {
@@ -111,7 +112,7 @@ exports.updateUser = functions.firestore
         .get(db
             .collection("games")
             .where("users", "array-contains", userId)
-            .where("state", "==", "active")
+            .where("state", "==", GAME.active)
             .limit(1))
         .then(gameResult => {
           if (gameResult.size === 1) {
@@ -120,7 +121,7 @@ exports.updateUser = functions.firestore
             //  add a reference to the game in the player document
             trs.update(db.collection("users").doc(userId), {
               gameId: gameId,
-              state: "found_game"
+              state: USER.found_game
             });
             console.log("FOUND GAME!");
             return true;
@@ -136,7 +137,7 @@ exports.updateUser = functions.firestore
       if (!foundExistingGame && data.state === "attempt_reconnect") {
         console.log("No game to reconnect to, enter menu state!");
         return trs.update(db.collection("users").doc(userId), {
-          state: "menu"
+          state: USER.menu
         });
       }
 
@@ -189,7 +190,7 @@ exports.updateUser = functions.firestore
                 mana: 1
               },
               history: [],
-              state: "active",
+              state: GAME.active,
               gameUpdateToCommit: null
             });
             gameId = gameRef.id;
@@ -197,7 +198,7 @@ exports.updateUser = functions.firestore
           // then add a reference to the game in the player document
           return trs.update(db.collection("users").doc(userId), {
             gameId: gameId,
-            state: "found_game"
+            state: USER.found_game
           });
         });
     });

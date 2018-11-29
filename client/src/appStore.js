@@ -1,12 +1,11 @@
 import firebase from "firebase";
 import { observable, action, computed, autorun, toJS } from "mobx";
-import c from "./constants";
+import { GAME, USER, ACTIONS } from "./constants";
 
 export default class AppStore {
   @observable userId;
   @observable userData = {};
   @observable gameData = {};
-  @observable gameState = c.gameStates.NONE;
   @observable lastControlTimeout = null;
   @observable controlTimeRemaining = null;
 
@@ -47,7 +46,7 @@ export default class AppStore {
           await this.userRef.set({
             authType: "anonymous",
             name: null,
-            state: "attempt_reconnect"
+            state: USER.attempt_reconnect
           });
 
           // Not sure if this will be useful...
@@ -82,7 +81,7 @@ export default class AppStore {
     autorun(this.subscribeToGame.bind(this));
 
     // Keep local timer updated
-    setInterval(this.decrementTimeRemaining, 100);
+    setInterval(this.decrementTimeRemaining, 500);
   }
 
   subscribeToUser() {
@@ -140,7 +139,7 @@ export default class AppStore {
       if (this.hasControl) {
         this.gameRef.update({
           gameUpdateToCommit: {
-            action: "pass_turn"
+            action: ACTIONS.pass_turn
           }
         });
       }
@@ -148,7 +147,7 @@ export default class AppStore {
     }
 
     // Just decrement time
-    this.controlTimeRemaining = this.controlTimeRemaining - 0.1;
+    this.controlTimeRemaining = this.controlTimeRemaining - 0.5;
   }
 
   @computed
@@ -194,7 +193,7 @@ export default class AppStore {
   get gameIsActive() {
     // Player ids ensures we're not still matchmaking
     return (
-      this.gameData.state === "active" &&
+      this.gameData.state === GAME.active &&
       this.playerData &&
       this.playerData.id &&
       this.enemyData &&
@@ -204,12 +203,12 @@ export default class AppStore {
 
   @computed
   get gameIsMatchmaking() {
-    return this.gameData.state === "active" && !this.gameIsActive;
+    return this.gameData.state === GAME.active && !this.gameIsActive;
   }
 
   @computed
   get gameIsComplete() {
-    return this.gameData.state === "complete";
+    return this.gameData.state === GAME.complete;
   }
 
   @computed
@@ -220,16 +219,15 @@ export default class AppStore {
   @action.bound
   findGame() {
     this.userRef.update({
-      state: "searching"
+      state: USER.searching
     });
   }
 
   // TODO update to concede
   @action.bound
   leaveGame() {
-    this.gameState = c.gameStates.NONE;
     this.userRef.update({
-      state: "menu",
+      state: USER.menu,
       gameId: null
     });
   }
@@ -237,12 +235,12 @@ export default class AppStore {
   @action.bound
   exitCompleteGame() {
     this.userRef.update({
-      state: "menu",
+      state: USER.menu,
       gameId: null
     });
     this.gameRef.update({
       gameUpdateToCommit: {
-        action: "exit_game"
+        action: ACTIONS.exit_game
       }
     });
   }
@@ -251,7 +249,7 @@ export default class AppStore {
   attack() {
     this.gameRef.update({
       gameUpdateToCommit: {
-        action: "attack"
+        action: ACTIONS.attack
       }
     });
   }
@@ -260,7 +258,7 @@ export default class AppStore {
   passTurn() {
     this.gameRef.update({
       gameUpdateToCommit: {
-        action: "pass_turn"
+        action: ACTIONS.pass_turn
       }
     });
   }
@@ -269,7 +267,7 @@ export default class AppStore {
   concedeGame() {
     this.gameRef.update({
       gameUpdateToCommit: {
-        action: "concede"
+        action: ACTIONS.concede
       }
     });
   }
