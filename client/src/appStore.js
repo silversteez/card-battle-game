@@ -2,6 +2,52 @@ import firebase from "firebase";
 import { observable, action, computed, autorun, toJS } from "mobx";
 import { GAME, USER, ACTIONS } from "./constants";
 
+class Card {
+  @observable name;
+  @observable attack;
+  @observable health;
+  @observable cost;
+  @observable behaviors = {
+    onSummon: [],
+    onAttack: [],
+    onDeath: []
+  };
+  
+  constructor(card) {
+    this.name = card.name;
+    this.attack = card.attack;
+    this.health = card.health;
+    this.cost = card.cost;
+    this.behaviors = card.behaviors;
+  }
+}
+
+class Deck {
+  @observable cards = [];
+  @observable maxSize = 60;
+  
+  constructor() {
+    for (let i = 0; i < this.maxSize; i++) {
+      const cardData = {
+        name: 'creep',
+        attack: 1,
+        health: 3,
+        cost: 1,
+        behaviors: {
+          onSummon: [],
+          onAttack: [],
+          onDeath: []
+        }
+      };
+      this.cards.push(new Card(cardData));
+    }
+  }
+}
+
+class Hand {
+  @observable cards = [];
+}
+
 export default class AppStore {
   @observable userId;
   @observable userData = {};
@@ -46,7 +92,8 @@ export default class AppStore {
           await this.userRef.set({
             authType: "anonymous",
             name: null,
-            state: USER.attempt_reconnect
+            state: USER.attempt_reconnect,
+            deck: toJS(new Deck())
           });
 
           // Not sure if this will be useful...

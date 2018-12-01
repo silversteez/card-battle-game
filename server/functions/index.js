@@ -97,14 +97,14 @@ exports.updateUser = functions.firestore
   .onUpdate((change, context) => {
     const userId = context.params.userId;
 
-    const data = change.after.data();
-    const previousData = change.before.data();
+    const user = change.after.data();
+    const prevUser = change.before.data();
 
     // This is crucial to prevent infinite loops.
-    if (data.state === previousData.state) return null;
+    if (user.state === prevUser.state) return null;
 
     // Only care about searching for now
-    if (data.state !== USER.searching && data.state !== USER.attempt_reconnect) return null;
+    if (user.state !== USER.searching && user.state !== USER.attempt_reconnect) return null;
 
     const db = admin.firestore();
     return db.runTransaction(async trs => {
@@ -134,7 +134,7 @@ exports.updateUser = functions.firestore
       }
 
       // If we're attempting reconnect on app load and we didn't find a game, enter menu state
-      if (!foundExistingGame && data.state === "attempt_reconnect") {
+      if (!foundExistingGame && user.state === "attempt_reconnect") {
         console.log("No game to reconnect to, enter menu state!");
         return trs.update(db.collection("users").doc(userId), {
           state: USER.menu
@@ -156,7 +156,7 @@ exports.updateUser = functions.firestore
             const game = gameSnapshot.data();
             const users = game.users.concat([userId]);
             const full = users.length === 2;
-            const player2 = Object.assign(game.player2, {id: userId});
+            const player2 = Object.assign(game.player2, {id: userId, deck: user.deck});
             const controlTimeLimit = 25;
             const date = new Date();
             const newGameData = {
@@ -182,12 +182,18 @@ exports.updateUser = functions.firestore
               player1: {
                 id: userId,
                 life: 30,
-                mana: 1
+                mana: 1,
+                deck: user.deck,
+                hand: [],
+                field: []
               },
               player2: {
                 id: null,
                 life: 30,
-                mana: 1
+                mana: 1,
+                deck: null,
+                hand: [],
+                field: []
               },
               history: [],
               state: GAME.active,
