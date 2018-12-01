@@ -12,7 +12,7 @@ class Card {
     onAttack: [],
     onDeath: []
   };
-  
+
   constructor(card) {
     this.name = card.name;
     this.attack = card.attack;
@@ -25,11 +25,11 @@ class Card {
 class Deck {
   @observable cards = [];
   @observable maxSize = 60;
-  
+
   constructor() {
     for (let i = 0; i < this.maxSize; i++) {
       const cardData = {
-        name: 'creep',
+        name: "creep",
         attack: 1,
         health: 3,
         cost: 1,
@@ -71,49 +71,17 @@ export default class AppStore {
       firebase.initializeApp(config);
     }
 
+    // Settings
     const db = firebase.firestore();
     const settings = { timestampsInSnapshots: true };
     db.settings(settings);
 
+    // db refs
     this.usersRef = db.collection("users");
     this.gamesRef = db.collection("games");
 
     // AUTH
-    firebase.auth().onAuthStateChanged(async user => {
-      if (user) {
-        // const isAnonymous = user.isAnonymous;
-        this.userId = user.uid;
-        console.log("signed in!", this.userId);
-
-        try {
-          // Set initial user data
-          // First thing we do is attempt to reconnect to an existing game
-          this.userRef = this.usersRef.doc(this.userId);
-          await this.userRef.set({
-            authType: "anonymous",
-            name: null,
-            state: USER.attempt_reconnect,
-            deck: toJS(new Deck())
-          });
-
-          // Not sure if this will be useful...
-          const user = await this.userRef.get();
-          if (user.exists) {
-            console.log("user exists", user);
-          } else {
-            console.log("user does NOT exist", user);
-          }
-
-          // Keep userData updated
-          this.subscribeToUser();
-        } catch (e) {
-          console.log(e);
-        }
-      } else {
-        // User is signed out.
-      }
-    });
-
+    firebase.auth().onAuthStateChanged(this.onAuthStateChange);
     firebase
       .auth()
       .signInAnonymously()
@@ -125,25 +93,55 @@ export default class AppStore {
       });
 
     // Update gameData whenever userData.gameId
-    autorun(this.subscribeToGame.bind(this));
+    autorun(this.subscribeToGame);
 
     // Keep local timer updated
     setInterval(this.decrementTimeRemaining, 500);
   }
 
+  onAuthStateChange = async user => {
+    if (user) {
+      // const isAnonymous = user.isAnonymous;
+      this.userId = user.uid;
+      console.log("signed in!", this.userId);
+
+      try {
+        // Set initial user data
+        // First thing we do is attempt to reconnect to an existing game
+        this.userRef = this.usersRef.doc(this.userId);
+        await this.userRef.set({
+          authType: "anonymous",
+          name: null,
+          state: USER.attempt_reconnect,
+          deck: toJS(new Deck())
+        });
+
+        // Not sure if this will be useful...
+        const user = await this.userRef.get();
+        if (user.exists) {
+          console.log("user exists", user);
+        } else {
+          console.log("user does NOT exist", user);
+        }
+
+        // Keep userData updated
+        this.subscribeToUser();
+      } catch (e) {
+        console.log(e);
+      }
+    } else {
+      // User is signed out.
+    }
+  };
+
   subscribeToUser() {
     if (this.unsubToUser) {
       this.unsubToUser();
     }
-    this.unsubToUser = this.userRef.onSnapshot(
-      action(doc => {
-        this.userData = doc.data();
-        console.log("userData is", toJS(this.userData));
-      })
-    );
+    this.unsubToUser = this.userRef.onSnapshot(this.onUserSnapshot);
   }
 
-  subscribeToGame() {
+  subscribeToGame = () => {
     if (this.unsubToGame) {
       this.unsubToGame();
     }
@@ -153,12 +151,19 @@ export default class AppStore {
     }
     console.log("gameId is", this.userData.gameId);
     this.gameRef = this.gamesRef.doc(this.userData.gameId);
-    this.unsubToGame = this.gameRef.onSnapshot(
-      action(doc => {
-        this.gameData = doc.data();
-        console.log("gameData is", toJS(this.gameData));
-      })
-    );
+    this.unsubToGame = this.gameRef.onSnapshot(this.onGameSnapshot);
+  };
+
+  @action.bound
+  onGameSnapshot(doc) {
+    this.gameData = doc.data();
+    console.log("gameData is", toJS(this.gameData));
+  }
+
+  @action.bound
+  onUserSnapshot(doc) {
+    this.userData = doc.data();
+    console.log("userData is", toJS(this.userData));
   }
 
   @action.bound
