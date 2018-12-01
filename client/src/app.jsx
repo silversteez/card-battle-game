@@ -17,6 +17,7 @@ const StyledButton = styled(Button)`
   padding: 50px;
 `;
 
+
 const UserId = observer(() => {
   if (app.userId) {
     return (
@@ -32,6 +33,22 @@ const UserId = observer(() => {
     );
   }
 });
+
+const Card = (props) => {
+  return (
+    <div>
+      <JSON json={props}/>
+    </div>
+  );
+};
+
+const StyledCard = styled(Card)`
+
+`;
+
+const Hand = () => {
+
+}
 
 const JSON = ({ json }) => {
   if (!json) return null;

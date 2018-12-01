@@ -165,7 +165,7 @@ exports.updateUser = functions.firestore
               player2,
               controlTimeLimit,
               controlTimeOut: date.setSeconds(date.getSeconds() + controlTimeLimit),
-              state: "active"
+              state: GAME.active
             };
             trs.update(gameSnapshot.ref, newGameData);
             gameId = gameSnapshot.id;
@@ -177,6 +177,7 @@ exports.updateUser = functions.firestore
               full: false,
               users: users,
               hasControl: "player1",
+              round: 0,
               controlTimeLimit: null,
               controlTimeOut: null,
               player1: {

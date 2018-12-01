@@ -29,7 +29,7 @@ class Deck {
   constructor() {
     for (let i = 0; i < this.maxSize; i++) {
       const cardData = {
-        name: "creep",
+        name: "creep" + i,
         attack: 1,
         health: 3,
         cost: 1,
@@ -157,6 +157,10 @@ export default class AppStore {
   @action.bound
   onGameSnapshot(doc) {
     this.gameData = doc.data();
+    if (this.playerData.hand.length === 0) {
+      this.playerData.hand = this.playerData.deck.slice(0,6);
+      this.playerData.deck = this.playerData.deck.slice(6);
+    }
     console.log("gameData is", toJS(this.gameData));
   }
 
