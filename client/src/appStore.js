@@ -95,9 +95,6 @@ export default class AppStore {
     // Update gameData whenever userData.gameId
     autorun(this.subscribeToGame);
 
-    // Update server gameData whenever this.gameData updates
-    autorun(this.updateGameOnServer);
-
     // Keep local timer updated
     setInterval(this.decrementTimeRemaining, 500);
   }
@@ -189,6 +186,7 @@ export default class AppStore {
     if (this.playerData.hand.length === 0) {
       this.playerData.hand = this.playerData.deck.slice(0,6);
       this.playerData.deck = this.playerData.deck.slice(6);
+      this.updateGameOnServer();
     }
     console.log("gameData is", toJS(this.gameData));
   }
@@ -206,6 +204,7 @@ export default class AppStore {
       this.playerData.mana = this.playerData.mana - card.cost;
       this.playerData.hand = this.playerData.hand.filter(cardInHand => cardInHand !== card);
       this.playerData.field.push(card);
+      this.updateGameOnServer();
     }
   }
 
