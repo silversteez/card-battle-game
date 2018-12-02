@@ -7,16 +7,16 @@ import LinearProgress from "@material-ui/core/LinearProgress/LinearProgress";
 import AppStore from "./appStore";
 
 const app = new AppStore();
+window.app = app;
 
 const AppContainer = styled.div`
   margin: 30px;
 `;
 
 const StyledButton = styled(Button)`
-  margin: 30px;
-  padding: 50px;
+  margin: 10px;
+  padding: 15px;
 `;
-
 
 const UserId = observer(() => {
   if (app.userId) {
@@ -34,21 +34,67 @@ const UserId = observer(() => {
   }
 });
 
-const Card = (props) => {
-  return (
-    <div>
-      <JSON json={props}/>
-    </div>
-  );
-};
-
-const StyledCard = styled(Card)`
-
+const CardContainer = styled.div`
+  background: #111212;
+  padding: 15px;
+  margin: 5px;
+  cursor: pointer;
+  &:hover {
+    background: #191b1b;
+  }
 `;
 
-const Hand = () => {
+const HandContainer = styled.div`
+  background: black;
+  padding: 15px;
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+`;
 
-}
+const FieldContainer = styled.div`
+  background: black;
+  padding: 15px;
+  display: flex;
+  width: 100%;
+`;
+
+
+const Card = observer(props => {
+  const { name, attack, health, cost } = props.card;
+  return (
+    <CardContainer onClick={() => app.onClickCardInHand(props.card)}>
+      <Typography variant="h6">{cost}</Typography>
+      <Typography>{name}</Typography>
+      <Typography>{attack} 🗡️</Typography>
+      <Typography>{health} ❤️</Typography>
+    </CardContainer>
+  );
+});
+
+const Hand = observer(() => {
+  if (!app.playerData) return null;
+  const cards = app.playerData.hand.map(card => {
+    return <Card key={card.name} card={card} />;
+  });
+  return (
+    <HandContainer>
+      <Typography>Mana: {app.playerData.mana}</Typography>
+      <Typography>Life: {app.playerData.life}</Typography>
+      {cards}
+    </HandContainer>
+  );
+});
+
+const Field = observer(({ playerData }) => {
+  if (!playerData) return null;
+  const cards = playerData.field.map(card => {
+    return <Card key={card.name} card={card} />;
+  });
+  return <FieldContainer>{cards}</FieldContainer>;
+});
 
 const JSON = ({ json }) => {
   if (!json) return null;
@@ -173,13 +219,13 @@ const Arena = () => {
 const App = observer(() => {
   return (
     <AppContainer>
-      <UserId/>
-      <Divider/>
+      <UserId />
+      <Divider />
       {app.gameIsActive || app.gameIsComplete ? <Arena /> : <Lobby />}
       <Divider />
-      <JSON json={app.userData} />
-      <Divider />
-      <JSON json={app.gameData} />
+      <Field playerData={app.enemyData} />
+      <Field playerData={app.playerData} />
+      <Hand />
     </AppContainer>
   );
 });

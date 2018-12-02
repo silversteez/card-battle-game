@@ -47,3 +47,27 @@ const Root = () => (
 
 const rootElement = document.getElementById("root");
 ReactDOM.render(<Root />, rootElement);
+
+if (module.hot) {
+  module.hot.accept();
+}
+
+// const render = Component => {
+//   return ReactDOM.render(
+//     <Provider store={store}>
+//       <BrowserRouter>
+//         <Component />
+//       </BrowserRouter>
+//     </Provider>,
+//     document.getElementById('root')
+//   );
+// };
+//
+// render(App);
+//
+// if (module.hot) {
+//   module.hot.accept('./App', () => {
+//     const NextApp = require('./App').default;
+//     render(NextApp);
+//   });
+// }

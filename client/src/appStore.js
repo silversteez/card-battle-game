@@ -95,6 +95,9 @@ export default class AppStore {
     // Update gameData whenever userData.gameId
     autorun(this.subscribeToGame);
 
+    // Update server gameData whenever this.gameData updates
+    autorun(this.updateGameOnServer);
+
     // Keep local timer updated
     setInterval(this.decrementTimeRemaining, 500);
   }
@@ -113,7 +116,7 @@ export default class AppStore {
           authType: "anonymous",
           name: null,
           state: USER.attempt_reconnect,
-          deck: toJS(new Deck())
+          deck: toJS(new Deck().cards)
         });
 
         // Not sure if this will be useful...
@@ -154,6 +157,32 @@ export default class AppStore {
     this.unsubToGame = this.gameRef.onSnapshot(this.onGameSnapshot);
   };
 
+  updateGameOnServer = () => {
+    console.log('want to update firebase game data...');
+    if (!this.gameRef) return;
+    console.log('sending game update to firebase...');
+    const p1 = this.gameData.player1;
+    const p2 = this.gameData.player2;
+    this.gameRef.update({
+      player1: {
+        id: p1.id,
+        life: p1.life,
+        mana: p1.mana,
+        deck: p1.deck,
+        hand: p1.hand,
+        field: p1.field
+      },
+      player2: {
+        id: p2.id,
+        life: p2.life,
+        mana: p2.mana,
+        deck: p2.deck,
+        hand: p2.hand,
+        field: p2.field
+      },
+    });
+  };
+
   @action.bound
   onGameSnapshot(doc) {
     this.gameData = doc.data();
@@ -168,6 +197,16 @@ export default class AppStore {
   onUserSnapshot(doc) {
     this.userData = doc.data();
     console.log("userData is", toJS(this.userData));
+  }
+
+  @action.bound
+  onClickCardInHand(card) {
+    if (!this.hasControl) return;
+    if (this.playerData.mana >= card.cost) {
+      this.playerData.mana = this.playerData.mana - card.cost;
+      this.playerData.hand = this.playerData.hand.filter(cardInHand => cardInHand !== card);
+      this.playerData.field.push(card);
+    }
   }
 
   @action.bound

@@ -42,7 +42,11 @@ exports.onGameUpdate = functions.firestore
 
       // Update control
       if (swapControl) {
-        hasControl = hasControl === "player1" ? "player2" : "player1";
+        const swapControlMap = {
+          player1: "player2",
+          player2: "player1"
+        };
+        hasControl = swapControlMap[hasControl];
         const controlTimeLimit = 25;
         const date = new Date();
         controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
