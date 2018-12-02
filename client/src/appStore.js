@@ -230,7 +230,8 @@ export default class AppStore {
     // request end of turn
     if (this.controlTimeRemaining <= 0) {
       // TODO to make this unhackable, switch logic to enemy requests turn end
-      if (this.hasControl) {
+      if (this.hasControl && !this.isUpdatingGame) {
+        console.log('time up! passing turn...');
         this.gameRef.update({
           gameUpdateToCommit: {
             action: ACTIONS.pass_turn
