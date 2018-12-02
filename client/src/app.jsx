@@ -42,16 +42,21 @@ const CardContainer = styled.div`
   &:hover {
     background: #191b1b;
   }
+  border: ${props => props.card.willAttack ? "1px solid red" : "1px solid transparent"}
 `;
 
 const HandContainer = styled.div`
   background: black;
-  padding: 15px;
-  display: flex;
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
+`;
+
+const CardsContainer = styled.div`
+  display: flex;
+    padding: 15px;
+  width: 100%;
 `;
 
 const FieldContainer = styled.div`
@@ -63,9 +68,10 @@ const FieldContainer = styled.div`
 
 
 const Card = observer(props => {
-  const { name, attack, health, cost } = props.card;
+  const {card, location} = props;
+  const { name, attack, health, cost } = card;
   return (
-    <CardContainer onClick={() => app.onClickCardInHand(props.card)}>
+    <CardContainer onClick={() => app.onClickCard({card, location})} card={card}>
       <Typography variant="h6">{cost}</Typography>
       <Typography>{name}</Typography>
       <Typography>{attack} 🗡️</Typography>
@@ -77,13 +83,16 @@ const Card = observer(props => {
 const Hand = observer(() => {
   if (!app.playerData) return null;
   const cards = app.playerData.hand.map(card => {
-    return <Card key={card.name} card={card} />;
+    return <Card key={card.name} card={card} location={app.playerData.hand} />;
   });
   return (
     <HandContainer>
+      <Timer />
       <Typography>Mana: {app.playerData.mana}</Typography>
       <Typography>Life: {app.playerData.life}</Typography>
+      <CardsContainer>
       {cards}
+      </CardsContainer>
     </HandContainer>
   );
 });
@@ -91,7 +100,7 @@ const Hand = observer(() => {
 const Field = observer(({ playerData }) => {
   if (!playerData) return null;
   const cards = playerData.field.map(card => {
-    return <Card key={card.name} card={card} />;
+    return <Card key={card.name} card={card} location={playerData.field}/>;
   });
   return <FieldContainer>{cards}</FieldContainer>;
 });
@@ -146,12 +155,7 @@ const Timer = observer(() => {
   const total = app.gameData.controlTimeLimit;
   const current = app.controlTimeRemaining;
   const percent = 100 - (current / total) * 100;
-  return (
-    <div>
-      <Typography>TIMER: {app.controlTimeRemaining}</Typography>
-      <LinearProgress variant="determinate" color="secondary" value={percent} />
-    </div>
-  );
+  return <LinearProgress variant="determinate" color="secondary" value={percent} />;
 });
 
 const Arena = () => {
@@ -160,7 +164,6 @@ const Arena = () => {
     <Fragment>
       {app.hasControl && (
         <Fragment>
-          <Timer />
           <Divider />
           <StyledButton
             variant="contained"

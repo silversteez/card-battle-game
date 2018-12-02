@@ -37,7 +37,8 @@ class Deck {
           onSummon: [],
           onAttack: [],
           onDeath: []
-        }
+        },
+        willAttack: false
       };
       this.cards.push(new Card(cardData));
     }
@@ -198,12 +199,20 @@ export default class AppStore {
   }
 
   @action.bound
-  onClickCardInHand(card) {
+  onClickCard({card, location}) {
     if (!this.hasControl) return;
-    if (this.playerData.mana >= card.cost) {
-      this.playerData.mana = this.playerData.mana - card.cost;
-      this.playerData.hand = this.playerData.hand.filter(cardInHand => cardInHand !== card);
-      this.playerData.field.push(card);
+    if (location === this.playerData.hand) {
+      if (this.playerData.mana >= card.cost) {
+        // If can play cards out of hand...
+        this.playerData.mana = this.playerData.mana - card.cost;
+        this.playerData.hand = this.playerData.hand.filter(cardInHand => cardInHand !== card);
+        this.playerData.field.push(card);
+        this.updateGameOnServer();
+        return;
+      }
+    }
+    if (location === this.playerData.field) {
+      card.willAttack = !card.willAttack;
       this.updateGameOnServer();
     }
   }

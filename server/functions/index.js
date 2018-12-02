@@ -22,13 +22,20 @@ exports.onGameUpdate = functions.firestore
       const history = gameData.history;
       let state = gameData.state;
       let controlTimeOut = gameData.controlTimeOut;
+      let round = gameData.round;
 
       // Update swapControl when needed
       let swapControl = false;
       let hasControl = gameData.hasControl;
 
       if (update.action === ACTIONS.attack) {
-        enemyData.life = enemyData.life - 15;
+        let attackDamage = 0;
+        playerData.field.forEach(card => {
+          if (card.willAttack) {
+            attackDamage = attackDamage + card.attack;
+          }
+        });
+        enemyData.life = enemyData.life - attackDamage;
         swapControl = true;
       }
 
@@ -49,7 +56,12 @@ exports.onGameUpdate = functions.firestore
         hasControl = swapControlMap[hasControl];
         const controlTimeLimit = 25;
         const date = new Date();
+        round++;
+        enemyData.mana = round < 10 ? round: 10;
         controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
+        // Reset field state
+        playerData.field.forEach(card => card.willAttack = false);
+        enemyData.field.forEach(card => card.willAttack = false);
       }
 
       // Update history
@@ -89,6 +101,7 @@ exports.onGameUpdate = functions.firestore
         controlTimeOut,
         history,
         state,
+        round,
         gameUpdateToCommit: null
       }));
 
