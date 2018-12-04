@@ -23,21 +23,11 @@ exports.onGameUpdate = functions.firestore
       let state = gameData.state;
       let controlTimeOut = gameData.controlTimeOut;
       let round = gameData.round;
+      let phase = gameData.phase;
 
       // Update swapControl when needed
       let swapControl = false;
       let hasControl = gameData.hasControl;
-
-      if (update.action === ACTIONS.attack) {
-        let attackDamage = 0;
-        playerData.field.forEach(card => {
-          if (card.willAttack) {
-            attackDamage = attackDamage + card.attack;
-          }
-        });
-        enemyData.life = enemyData.life - attackDamage;
-        swapControl = true;
-      }
 
       if (update.action === ACTIONS.pass_turn) {
         swapControl = true;
@@ -54,10 +44,11 @@ exports.onGameUpdate = functions.firestore
           player2: "player1"
         };
         hasControl = swapControlMap[hasControl];
-        const controlTimeLimit = 25;
+        const controlTimeLimit = 40;
         const date = new Date();
-        round++;
         enemyData.mana = round < 10 ? round: 10;
+        round++;
+        phase = "preAttack";
         controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
         // Reset field state
         playerData.field.forEach(card => card.willAttack = false);
@@ -102,6 +93,7 @@ exports.onGameUpdate = functions.firestore
         history,
         state,
         round,
+        phase,
         gameUpdateToCommit: null
       }));
 
@@ -174,7 +166,7 @@ exports.updateUser = functions.firestore
             const users = game.users.concat([userId]);
             const full = users.length === 2;
             const player2 = Object.assign(game.player2, {id: userId, deck: user.deck});
-            const controlTimeLimit = 25;
+            const controlTimeLimit = 40;
             const date = new Date();
             const newGameData = {
               full,
@@ -195,6 +187,7 @@ exports.updateUser = functions.firestore
               users: users,
               hasControl: "player1",
               round: 0,
+              phase: "preAttack",
               controlTimeLimit: null,
               controlTimeOut: null,
               player1: {

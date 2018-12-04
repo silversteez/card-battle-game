@@ -10,12 +10,12 @@ const app = new AppStore();
 window.app = app;
 
 const AppContainer = styled.div`
-  margin: 30px;
+  margin: 0;
 `;
 
 const StyledButton = styled(Button)`
-  margin: 10px;
-  padding: 15px;
+  margin: 8px;
+  padding: 8px;
 `;
 
 const UserId = observer(() => {
@@ -35,18 +35,25 @@ const UserId = observer(() => {
 });
 
 const CardContainer = styled.div`
-  background: #111212;
-  padding: 15px;
-  margin: 5px;
+  background: #3f51b5;
+  padding: 8px;
+  margin: 4px;
   cursor: pointer;
   &:hover {
-    background: #191b1b;
+    background: #5864b5;
   }
-  border: ${props => props.card.willAttack ? "1px solid red" : "1px solid transparent"}
+  border: ${props => {
+    if (props.card.willAttack) return "1px solid red";
+    if (props.card.willBlock) return "1px solid blue";
+    return "1px solid transparent";
+  }}
+`;
+
+const EnemyHandContainer = styled.div`
+  width: 100%;
 `;
 
 const HandContainer = styled.div`
-  background: black;
   position: fixed;
   bottom: 0;
   left: 0;
@@ -55,28 +62,43 @@ const HandContainer = styled.div`
 
 const CardsContainer = styled.div`
   display: flex;
-    padding: 15px;
+  padding: 8px;
   width: 100%;
+  height: 150px;
 `;
 
 const FieldContainer = styled.div`
-  background: black;
-  padding: 15px;
+  padding: 8px;
   display: flex;
   width: 100%;
+  height: 150px;
 `;
 
-
 const Card = observer(props => {
-  const {card, location} = props;
+  const { card, location } = props;
   const { name, attack, health, cost } = card;
   return (
-    <CardContainer onClick={() => app.onClickCard({card, location})} card={card}>
+    <CardContainer
+      onClick={() => app.onClickCard({ card, location })}
+      card={card}
+    >
       <Typography variant="h6">{cost}</Typography>
       <Typography>{name}</Typography>
       <Typography>{attack} 🗡️</Typography>
       <Typography>{health} ❤️</Typography>
     </CardContainer>
+  );
+});
+
+const EnemyHand = observer(() => {
+  if (!app.enemyData) return null;
+  return (
+    <EnemyHandContainer>
+      <Timer active={!app.hasControl} />
+      <Typography>Enemy: {app.enemyData.id}</Typography>
+      <Typography>{app.enemyData.life} Life️</Typography>
+      <Typography>{app.enemyData.hand.length} Cards️</Typography>
+    </EnemyHandContainer>
   );
 });
 
@@ -87,12 +109,11 @@ const Hand = observer(() => {
   });
   return (
     <HandContainer>
-      <Timer />
+      <Timer active={app.hasControl} />
       <Typography>Mana: {app.playerData.mana}</Typography>
       <Typography>Life: {app.playerData.life}</Typography>
-      <CardsContainer>
-      {cards}
-      </CardsContainer>
+      <GameControls />
+      <CardsContainer>{cards}</CardsContainer>
     </HandContainer>
   );
 });
@@ -100,7 +121,7 @@ const Hand = observer(() => {
 const Field = observer(({ playerData }) => {
   if (!playerData) return null;
   const cards = playerData.field.map(card => {
-    return <Card key={card.name} card={card} location={playerData.field}/>;
+    return <Card key={card.name} card={card} location={playerData.field} />;
   });
   return <FieldContainer>{cards}</FieldContainer>;
 });
@@ -151,14 +172,25 @@ const Lobby = () => {
   );
 };
 
-const Timer = observer(() => {
-  const total = app.gameData.controlTimeLimit;
-  const current = app.controlTimeRemaining;
-  const percent = 100 - (current / total) * 100;
-  return <LinearProgress variant="determinate" color="secondary" value={percent} />;
+const TimerContainer = styled.div`
+  opacity: ${props => (props.active ? 1 : 0)};
+`;
+
+const Timer = observer(({ active }) => {
+  let percent = 0;
+  if (active) {
+    const total = app.gameData.controlTimeLimit;
+    const current = app.controlTimeRemaining;
+    percent = 100 - (current / total) * 100;
+  }
+  return (
+    <TimerContainer active={active}>
+      <LinearProgress variant="determinate" color="secondary" value={percent} />
+    </TimerContainer>
+  );
 });
 
-const Arena = () => {
+const GameControls = () => {
   const disabled = app.isUpdatingGame;
   return (
     <Fragment>
@@ -168,10 +200,10 @@ const Arena = () => {
           <StyledButton
             variant="contained"
             color="primary"
-            onClick={app.attack}
+            onClick={app.onConfirm}
             disabled={disabled}
           >
-            ATTACK
+            CONFIRM
           </StyledButton>
           <StyledButton
             variant="contained"
@@ -179,7 +211,7 @@ const Arena = () => {
             onClick={app.passTurn}
             disabled={disabled}
           >
-            PASS
+            PASS TURN
           </StyledButton>
         </Fragment>
       )}
@@ -224,8 +256,9 @@ const App = observer(() => {
     <AppContainer>
       <UserId />
       <Divider />
-      {app.gameIsActive || app.gameIsComplete ? <Arena /> : <Lobby />}
+      {app.gameIsActive || app.gameIsComplete ? null : <Lobby />}
       <Divider />
+      <EnemyHand />
       <Field playerData={app.enemyData} />
       <Field playerData={app.playerData} />
       <Hand />

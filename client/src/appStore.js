@@ -38,7 +38,8 @@ class Deck {
           onAttack: [],
           onDeath: []
         },
-        willAttack: false
+        willAttack: false,
+        willBlock: false
       };
       this.cards.push(new Card(cardData));
     }
@@ -156,9 +157,7 @@ export default class AppStore {
   };
 
   updateGameOnServer = () => {
-    console.log('want to update firebase game data...');
     if (!this.gameRef) return;
-    console.log('sending game update to firebase...');
     const p1 = this.gameData.player1;
     const p2 = this.gameData.player2;
     this.gameRef.update({
@@ -199,21 +198,83 @@ export default class AppStore {
   }
 
   @action.bound
+  onConfirm() {
+    if (this.gameData.phase === "preAttack") {
+      const phase = "block";
+      const hasControl = this.enemyKey;
+      const controlTimeLimit = 25;
+      const date = new Date();
+      const controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
+      this.gameRef.update({
+        phase,
+        hasControl,
+        controlTimeOut
+      });
+      return;
+    }
+
+    if (this.gameData.phase === "block") {
+      // Calc attack damage
+      let attackDamage = 0;
+      this.playerData.field.forEach(card => {
+        if (card.willAttack) {
+          attackDamage = attackDamage + card.attack;
+        }
+      });
+      this.enemyData.life = this.enemyData.life - attackDamage;
+
+      // Increase mana for next round
+      this.enemyData.mana = (this.gameData.round < 10) ? this.gameData.round + 1 : 10;
+
+      // Set phase and pass control
+      const phase = "preAttack";
+      const hasControl = this.enemyKey;
+      const controlTimeLimit = 40;
+      const date = new Date();
+      const controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
+      const round = this.gameData.round + 1;
+
+      // Reset field state
+      this.playerData.field.forEach(card => { card.willAttack = false; card.willBlock = false; });
+      this.enemyData.field.forEach(card => { card.willAttack = false; card.willBlock = false; });
+
+      this.gameRef.update({
+        phase,
+        round,
+        hasControl,
+        controlTimeOut,
+        [this.playerKey]: this.playerData,
+        [this.enemyKey]: this.enemyData
+      });
+      return;
+    }
+  }
+
+  @action.bound
   onClickCard({card, location}) {
     if (!this.hasControl) return;
     if (location === this.playerData.hand) {
-      if (this.playerData.mana >= card.cost) {
-        // If can play cards out of hand...
-        this.playerData.mana = this.playerData.mana - card.cost;
-        this.playerData.hand = this.playerData.hand.filter(cardInHand => cardInHand !== card);
-        this.playerData.field.push(card);
-        this.updateGameOnServer();
-        return;
+      if (this.gameData.phase === "preAttack") {
+        if (this.playerData.mana >= card.cost) {
+          // If can play cards out of hand...
+          this.playerData.mana = this.playerData.mana - card.cost;
+          this.playerData.hand = this.playerData.hand.filter(cardInHand => cardInHand !== card);
+          this.playerData.field.push(card);
+          this.updateGameOnServer();
+          return;
+        }
       }
     }
     if (location === this.playerData.field) {
-      card.willAttack = !card.willAttack;
-      this.updateGameOnServer();
+      if (this.gameData.phase === "preAttack") {
+        card.willAttack = !card.willAttack;
+        this.updateGameOnServer();
+        return;
+      }
+      if (this.gameData.phase === "block") {
+        card.willBlock = !card.willBlock;
+        this.updateGameOnServer();
+      }
     }
   }
 
@@ -289,6 +350,16 @@ export default class AppStore {
   }
 
   @computed
+  get enemyKey() {
+    if (this.playerKey === "player1") {
+      return "player2";
+    } else if (this.playerKey === "player2") {
+      return "player1";
+    }
+    return null;
+  }
+
+  @computed
   get hasControl() {
     return this.gameIsActive && this.gameData.hasControl === this.playerKey;
   }
@@ -345,15 +416,6 @@ export default class AppStore {
     this.gameRef.update({
       gameUpdateToCommit: {
         action: ACTIONS.exit_game
-      }
-    });
-  }
-
-  @action.bound
-  attack() {
-    this.gameRef.update({
-      gameUpdateToCommit: {
-        action: ACTIONS.attack
       }
     });
   }
