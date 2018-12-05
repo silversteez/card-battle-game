@@ -199,6 +199,7 @@ export default class AppStore {
 
   @action.bound
   onConfirm() {
+    // CONFIRM ATTACKS
     if (this.gameData.phase === "preAttack") {
       const phase = "block";
       const hasControl = this.enemyKey;
@@ -213,22 +214,22 @@ export default class AppStore {
       return;
     }
 
+    // CONFIRM BLOCKS
     if (this.gameData.phase === "block") {
       // Calc attack damage
       let attackDamage = 0;
-      this.playerData.field.forEach(card => {
+      this.enemyData.field.forEach(card => {
         if (card.willAttack) {
           attackDamage = attackDamage + card.attack;
         }
       });
-      this.enemyData.life = this.enemyData.life - attackDamage;
+      this.playerData.life = this.playerData.life - attackDamage;
 
       // Increase mana for next round
-      this.enemyData.mana = (this.gameData.round < 10) ? this.gameData.round + 1 : 10;
+      this.playerData.mana = (this.gameData.round < 10) ? this.gameData.round + 1 : 10;
 
-      // Set phase and pass control
+      // Set phase and KEEP control (for now)
       const phase = "preAttack";
-      const hasControl = this.enemyKey;
       const controlTimeLimit = 40;
       const date = new Date();
       const controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
@@ -241,7 +242,6 @@ export default class AppStore {
       this.gameRef.update({
         phase,
         round,
-        hasControl,
         controlTimeOut,
         [this.playerKey]: this.playerData,
         [this.enemyKey]: this.enemyData
