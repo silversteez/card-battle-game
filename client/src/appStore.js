@@ -1,53 +1,34 @@
 import firebase from "firebase";
 import { observable, action, computed, autorun, toJS } from "mobx";
 import { GAME, USER, ACTIONS } from "./constants";
-
-class Card {
-  @observable name;
-  @observable attack;
-  @observable health;
-  @observable cost;
-  @observable behaviors = {
-    onSummon: [],
-    onAttack: [],
-    onDeath: []
-  };
-
-  constructor(card) {
-    this.name = card.name;
-    this.attack = card.attack;
-    this.health = card.health;
-    this.cost = card.cost;
-    this.behaviors = card.behaviors;
-  }
-}
+import uuid from "./uuid";
 
 class Deck {
-  @observable cards = [];
-  @observable maxSize = 60;
+  cards = [];
+  maxSize = 60;
 
   constructor() {
     for (let i = 0; i < this.maxSize; i++) {
-      const cardData = {
-        name: "creep" + i,
-        attack: 1,
-        health: 3,
-        cost: 1,
-        behaviors: {
-          onSummon: [],
-          onAttack: [],
-          onDeath: []
-        },
-        willAttack: false,
-        willBlock: false
-      };
-      this.cards.push(new Card(cardData));
+      this.cards.push(this.getCard(i));
     }
   }
-}
 
-class Hand {
-  @observable cards = [];
+  getCard(i) {
+    return {
+      id: uuid(),
+      name: "creep" + i,
+      attack: 1,
+      health: 3,
+      cost: 1,
+      behaviors: {
+        onSummon: [],
+        onAttack: [],
+        onDeath: []
+      },
+      willAttack: false,
+      willBlock: false
+    };
+  }
 }
 
 export default class AppStore {
@@ -115,7 +96,7 @@ export default class AppStore {
           authType: "anonymous",
           name: null,
           state: USER.attempt_reconnect,
-          deck: toJS(new Deck().cards)
+          deck: new Deck().cards
         });
 
         // Not sure if this will be useful...
@@ -176,7 +157,7 @@ export default class AppStore {
         deck: p2.deck,
         hand: p2.hand,
         field: p2.field
-      },
+      }
     });
   };
 
@@ -184,7 +165,7 @@ export default class AppStore {
   onGameSnapshot(doc) {
     this.gameData = doc.data();
     if (this.playerData.hand.length === 0) {
-      this.playerData.hand = this.playerData.deck.slice(0,6);
+      this.playerData.hand = this.playerData.deck.slice(0, 6);
       this.playerData.deck = this.playerData.deck.slice(6);
       this.updateGameOnServer();
     }
@@ -205,7 +186,9 @@ export default class AppStore {
       const hasControl = this.enemyKey;
       const controlTimeLimit = 25;
       const date = new Date();
-      const controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
+      const controlTimeOut = date.setSeconds(
+        date.getSeconds() + controlTimeLimit
+      );
       this.gameRef.update({
         phase,
         hasControl,
@@ -226,18 +209,27 @@ export default class AppStore {
       this.playerData.life = this.playerData.life - attackDamage;
 
       // Increase mana for next round
-      this.playerData.mana = (this.gameData.round < 10) ? this.gameData.round + 1 : 10;
+      this.playerData.mana =
+        this.gameData.round < 10 ? this.gameData.round + 1 : 10;
 
       // Set phase and KEEP control (for now)
       const phase = "preAttack";
       const controlTimeLimit = 40;
       const date = new Date();
-      const controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
+      const controlTimeOut = date.setSeconds(
+        date.getSeconds() + controlTimeLimit
+      );
       const round = this.gameData.round + 1;
 
       // Reset field state
-      this.playerData.field.forEach(card => { card.willAttack = false; card.willBlock = false; });
-      this.enemyData.field.forEach(card => { card.willAttack = false; card.willBlock = false; });
+      this.playerData.field.forEach(card => {
+        card.willAttack = false;
+        card.willBlock = false;
+      });
+      this.enemyData.field.forEach(card => {
+        card.willAttack = false;
+        card.willBlock = false;
+      });
 
       this.gameRef.update({
         phase,
@@ -251,21 +243,23 @@ export default class AppStore {
   }
 
   @action.bound
-  onClickCard({card, location}) {
+  onClickCard(card) {
     if (!this.hasControl) return;
-    if (location === this.playerData.hand) {
+    if (this.playerData.hand.includes(card)) {
       if (this.gameData.phase === "preAttack") {
         if (this.playerData.mana >= card.cost) {
           // If can play cards out of hand...
           this.playerData.mana = this.playerData.mana - card.cost;
-          this.playerData.hand = this.playerData.hand.filter(cardInHand => cardInHand !== card);
+          this.playerData.hand = this.playerData.hand.filter(
+            cardInHand => cardInHand !== card
+          );
           this.playerData.field.push(card);
           this.updateGameOnServer();
           return;
         }
       }
     }
-    if (location === this.playerData.field) {
+    if (this.playerData.field.includes(card)) {
       if (this.gameData.phase === "preAttack") {
         card.willAttack = !card.willAttack;
         this.updateGameOnServer();
@@ -277,6 +271,34 @@ export default class AppStore {
       }
     }
   }
+
+  @action.bound
+  onPlayerHandDragEnd(result) {
+    // Helper
+    const reorder = (list, startIndex, endIndex) => {
+      const result = Array.from(list);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      return result;
+    };
+
+    if (!result.destination) {
+      return;
+    }
+
+    this.playerData.hand = reorder(
+      this.playerData.hand,
+      result.source.index,
+      result.destination.index
+    );
+
+    this.gameRef.update({
+      [this.playerKey]: this.playerData
+    });
+  }
+
+  @action.bound
+  onPlayerFieldDragEnd() {}
 
   @action.bound
   decrementTimeRemaining() {
@@ -301,7 +323,7 @@ export default class AppStore {
     if (this.controlTimeRemaining <= 0) {
       // TODO to make this unhackable, switch logic to enemy requests turn end
       if (this.hasControl && !this.isUpdatingGame) {
-        console.log('time up! passing turn...');
+        console.log("time up! passing turn...");
         this.gameRef.update({
           gameUpdateToCommit: {
             action: ACTIONS.pass_turn

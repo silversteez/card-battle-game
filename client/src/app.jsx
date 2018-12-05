@@ -4,6 +4,7 @@ import styled from "styled-components";
 import Button from "@material-ui/core/Button/Button";
 import Typography from "@material-ui/core/Typography/Typography";
 import LinearProgress from "@material-ui/core/LinearProgress/LinearProgress";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import AppStore from "./appStore";
 
 const app = new AppStore();
@@ -46,7 +47,7 @@ const CardContainer = styled.div`
     if (props.card.willAttack) return "1px solid red";
     if (props.card.willBlock) return "1px solid blue";
     return "1px solid transparent";
-  }}
+  }};
 `;
 
 const EnemyHandContainer = styled.div`
@@ -74,19 +75,34 @@ const FieldContainer = styled.div`
   height: 150px;
 `;
 
-const Card = observer(props => {
-  const { card, location } = props;
+const Card = observer(({card}) => {
   const { name, attack, health, cost } = card;
   return (
     <CardContainer
-      onClick={() => app.onClickCard({ card, location })}
       card={card}
+      onClick={() => app.onClickCard(card)}
     >
       <Typography variant="h6">{cost}</Typography>
       <Typography>{name}</Typography>
       <Typography>{attack} 🗡️</Typography>
       <Typography>{health} ❤️</Typography>
     </CardContainer>
+  );
+});
+
+const DraggableCard = observer(({ card, index }) => {
+  return (
+    <Draggable key={card.id} draggableId={card.id} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+        >
+          <Card card={card} isDragging={snapshot.isDragging}/>
+        </div>
+      )}
+    </Draggable>
   );
 });
 
@@ -102,18 +118,41 @@ const EnemyHand = observer(() => {
   );
 });
 
+const DroppableHandArea = observer(() => {
+  return (
+    <DragDropContext onDragEnd={app.onPlayerHandDragEnd}>
+      <Droppable droppableId="player-hand" direction="horizontal">
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            style={{
+              display: "flex",
+              padding: 8,
+              height: 150,
+              overflow: "auto"
+            }}
+            {...provided.droppableProps}
+          >
+            {app.playerData.hand.map((card, index) => (
+              <DraggableCard card={card} index={index}/>
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
+    </DragDropContext>
+  );
+});
+
 const Hand = observer(() => {
   if (!app.playerData) return null;
-  const cards = app.playerData.hand.map(card => {
-    return <Card key={card.name} card={card} location={app.playerData.hand} />;
-  });
   return (
     <HandContainer>
       <Timer active={app.hasControl} />
       <Typography>Mana: {app.playerData.mana}</Typography>
       <Typography>Life: {app.playerData.life}</Typography>
       <GameControls />
-      <CardsContainer>{cards}</CardsContainer>
+      <DroppableHandArea />
     </HandContainer>
   );
 });
@@ -121,7 +160,7 @@ const Hand = observer(() => {
 const Field = observer(({ playerData }) => {
   if (!playerData) return null;
   const cards = playerData.field.map(card => {
-    return <Card key={card.name} card={card} location={playerData.field} />;
+    return <Card key={card.name} card={card} />;
   });
   return <FieldContainer>{cards}</FieldContainer>;
 });
