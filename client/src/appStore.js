@@ -281,28 +281,41 @@ export default class AppStore {
       return;
     }
 
-    const droppableIdMap = {
-      "player-hand": this.playerData.hand,
-      "player-field": this.playerData.field
-    };
-
-    if (source.droppableId === destination.droppableId) {
-      // Reorder hand or field
-      droppableIdMap[source.droppableId] = reorderDroppable(
-        droppableIdMap[source.droppableId],
+    if (
+      source.droppableId === destination.droppableId &&
+      source.droppableId === "player-hand"
+    ) {
+      // Reorder hand
+      this.playerData.hand = reorderDroppable(
+        this.playerData.hand,
         source.index,
         destination.index
       );
-    } else {
+    } else if (
+      source.droppableId === destination.droppableId &&
+      source.droppableId === "player-field"
+    ) {
+      // Reorder field
+      this.playerData.field = reorderDroppable(
+        this.playerData.field,
+        source.index,
+        destination.index
+      );
+    } else if (
+      source.droppableId === "player-hand" &&
+      destination.droppableId === "player-field"
+    ) {
       // Move card from hand to field
-      const [updatedSource, updatedDestination] = moveBetweenDroppables(
-        droppableIdMap[source.droppableId],
-        droppableIdMap[destination.droppableId],
+      const [updatedHand, updatedField] = moveBetweenDroppables(
+        this.playerData.hand,
+        this.playerData.field,
         source,
         destination
       );
-      droppableIdMap[source.droppableId] = updatedSource;
-      droppableIdMap[destination.droppableId] = updatedDestination;
+      this.playerData.hand = updatedHand;
+      this.playerData.field = updatedField;
+    } else {
+      return;
     }
 
     this.gameRef.update({

@@ -37,6 +37,7 @@ const UserId = observer(() => {
 
 const CardContainer = styled.div`
   background: #3f51b5;
+  width: 80px;
   padding: 8px;
   margin: 4px;
   cursor: pointer;
@@ -61,13 +62,6 @@ const HandContainer = styled.div`
   right: 0;
 `;
 
-const CardsContainer = styled.div`
-  display: flex;
-  padding: 8px;
-  width: 100%;
-  height: 150px;
-`;
-
 const FieldContainer = styled.div`
   padding: 8px;
   display: flex;
@@ -75,13 +69,10 @@ const FieldContainer = styled.div`
   height: 150px;
 `;
 
-const Card = observer(({card}) => {
+const Card = observer(({ card }) => {
   const { name, attack, health, cost } = card;
   return (
-    <CardContainer
-      card={card}
-      onClick={() => app.onClickCard(card)}
-    >
+    <CardContainer card={card} onClick={() => app.onClickCard(card)}>
       <Typography variant="h6">{cost}</Typography>
       <Typography>{name}</Typography>
       <Typography>{attack} 🗡️</Typography>
@@ -90,50 +81,48 @@ const Card = observer(({card}) => {
   );
 });
 
-const DraggableCard = observer(({ card, index }) => {
+const DraggableCard = observer(({ card, index, isDragDisabled }) => {
   return (
-    <Draggable draggableId={card.id} index={index}>
+    <Draggable draggableId={card.id} index={index} isDragDisabled={isDragDisabled}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
         >
-          <Card card={card} isDragging={snapshot.isDragging}/>
+          <Card card={card} isDragging={snapshot.isDragging} />
         </div>
       )}
     </Draggable>
   );
 });
 
-const DraggableCards = observer(({zone}) => {
+const DraggableCards = observer(({ zone }) => {
   return app.playerData[zone].map((card, index) => (
-    <DraggableCard key={card.id} card={card} index={index}/>
+    <DraggableCard key={card.id} card={card} index={index} isDragDisabled={zone === "field" && !app.phaseIsPlayerBlocks}/>
   ));
 });
 
 const DroppableHandArea = observer(() => {
   return (
-
-      <Droppable droppableId="player-hand" direction="horizontal">
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            style={{
-              display: "flex",
-              padding: 8,
-              height: 150,
-              overflow: "auto",
-              width: "100%"
-            }}
-            {...provided.droppableProps}
-          >
-            <DraggableCards zone={"hand"}/>
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
-    
+    <Droppable droppableId="player-hand" direction="horizontal">
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          style={{
+            display: "flex",
+            padding: 8,
+            height: 150,
+            overflow: "auto",
+            width: "100%"
+          }}
+          {...provided.droppableProps}
+        >
+          <DraggableCards zone={"hand"} />
+          {provided.placeholder}
+        </div>
+      )}
+    </Droppable>
   );
 });
 
@@ -154,24 +143,24 @@ const Hand = observer(() => {
 const DroppablePlayerFieldArea = observer(() => {
   if (!app.playerData) return null;
   return (
-      <Droppable droppableId="player-field" direction="horizontal">
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            style={{
-              display: "flex",
-              padding: 8,
-              height: 150,
-              overflow: "auto",
-              width: "100%"
-            }}
-            {...provided.droppableProps}
-          >
-            <DraggableCards zone={"field"}/>
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
+    <Droppable droppableId="player-field" direction="horizontal">
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          style={{
+            display: "flex",
+            padding: 8,
+            height: 150,
+            overflow: "auto",
+            width: "100%"
+          }}
+          {...provided.droppableProps}
+        >
+          <DraggableCards zone={"field"} />
+          {provided.placeholder}
+        </div>
+      )}
+    </Droppable>
   );
 });
 
@@ -330,7 +319,7 @@ const App = observer(() => {
         <Divider />
         <EnemyHand />
         <Field playerData={app.enemyData} />
-        <DroppablePlayerFieldArea/>
+        <DroppablePlayerFieldArea />
         <Hand />
       </DragDropContext>
     </AppContainer>
