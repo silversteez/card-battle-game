@@ -92,7 +92,7 @@ const Card = observer(({card}) => {
 
 const DraggableCard = observer(({ card, index }) => {
   return (
-    <Draggable key={card.id} draggableId={card.id} index={index}>
+    <Draggable draggableId={card.id} index={index}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -106,6 +106,83 @@ const DraggableCard = observer(({ card, index }) => {
   );
 });
 
+const DraggableCards = observer(({zone}) => {
+  return app.playerData[zone].map((card, index) => (
+    <DraggableCard key={card.id} card={card} index={index}/>
+  ));
+});
+
+const DroppableHandArea = observer(() => {
+  return (
+
+      <Droppable droppableId="player-hand" direction="horizontal">
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            style={{
+              display: "flex",
+              padding: 8,
+              height: 150,
+              overflow: "auto",
+              width: "100%"
+            }}
+            {...provided.droppableProps}
+          >
+            <DraggableCards zone={"hand"}/>
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
+    
+  );
+});
+
+const Hand = observer(() => {
+  if (!app.playerData) return null;
+  return (
+    <HandContainer>
+      <Timer active={app.hasControl} />
+      <Typography>{app.playerHandMessage}</Typography>
+      <Typography>Mana: {app.playerData.mana}</Typography>
+      <Typography>Life: {app.playerData.life}</Typography>
+      <GameControls />
+      <DroppableHandArea />
+    </HandContainer>
+  );
+});
+
+const DroppablePlayerFieldArea = observer(() => {
+  if (!app.playerData) return null;
+  return (
+      <Droppable droppableId="player-field" direction="horizontal">
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            style={{
+              display: "flex",
+              padding: 8,
+              height: 150,
+              overflow: "auto",
+              width: "100%"
+            }}
+            {...provided.droppableProps}
+          >
+            <DraggableCards zone={"field"}/>
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
+  );
+});
+
+const Field = observer(({ playerData }) => {
+  if (!playerData) return null;
+  const cards = playerData.field.map(card => {
+    return <Card key={card.name} card={card} />;
+  });
+  return <FieldContainer>{cards}</FieldContainer>;
+});
+
 const EnemyHand = observer(() => {
   if (!app.enemyData) return null;
   return (
@@ -116,53 +193,6 @@ const EnemyHand = observer(() => {
       <Typography>{app.enemyData.hand.length} Cards️</Typography>
     </EnemyHandContainer>
   );
-});
-
-const DroppableHandArea = observer(() => {
-  return (
-    <DragDropContext onDragEnd={app.onPlayerHandDragEnd}>
-      <Droppable droppableId="player-hand" direction="horizontal">
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            style={{
-              display: "flex",
-              padding: 8,
-              height: 150,
-              overflow: "auto"
-            }}
-            {...provided.droppableProps}
-          >
-            {app.playerData.hand.map((card, index) => (
-              <DraggableCard card={card} index={index}/>
-            ))}
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
-    </DragDropContext>
-  );
-});
-
-const Hand = observer(() => {
-  if (!app.playerData) return null;
-  return (
-    <HandContainer>
-      <Timer active={app.hasControl} />
-      <Typography>Mana: {app.playerData.mana}</Typography>
-      <Typography>Life: {app.playerData.life}</Typography>
-      <GameControls />
-      <DroppableHandArea />
-    </HandContainer>
-  );
-});
-
-const Field = observer(({ playerData }) => {
-  if (!playerData) return null;
-  const cards = playerData.field.map(card => {
-    return <Card key={card.name} card={card} />;
-  });
-  return <FieldContainer>{cards}</FieldContainer>;
 });
 
 const JSON = ({ json }) => {
@@ -293,14 +323,16 @@ const GameControls = () => {
 const App = observer(() => {
   return (
     <AppContainer>
-      <UserId />
-      <Divider />
-      {app.gameIsActive || app.gameIsComplete ? null : <Lobby />}
-      <Divider />
-      <EnemyHand />
-      <Field playerData={app.enemyData} />
-      <Field playerData={app.playerData} />
-      <Hand />
+      <DragDropContext onDragEnd={app.onCardDragEnd}>
+        <UserId />
+        <Divider />
+        {app.gameIsActive || app.gameIsComplete ? null : <Lobby />}
+        <Divider />
+        <EnemyHand />
+        <Field playerData={app.enemyData} />
+        <DroppablePlayerFieldArea/>
+        <Hand />
+      </DragDropContext>
     </AppContainer>
   );
 });

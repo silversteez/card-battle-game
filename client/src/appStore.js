@@ -273,32 +273,42 @@ export default class AppStore {
   }
 
   @action.bound
-  onPlayerHandDragEnd(result) {
-    // Helper
-    const reorder = (list, startIndex, endIndex) => {
-      const result = Array.from(list);
-      const [removed] = result.splice(startIndex, 1);
-      result.splice(endIndex, 0, removed);
-      return result;
-    };
+  onCardDragEnd(result) {
+    const { source, destination } = result;
 
-    if (!result.destination) {
+    // Drag didn't end on droppable
+    if (!destination) {
       return;
     }
 
-    this.playerData.hand = reorder(
-      this.playerData.hand,
-      result.source.index,
-      result.destination.index
-    );
+    const droppableIdMap = {
+      "player-hand": this.playerData.hand,
+      "player-field": this.playerData.field
+    };
+
+    if (source.droppableId === destination.droppableId) {
+      // Reorder hand or field
+      droppableIdMap[source.droppableId] = reorderDroppable(
+        droppableIdMap[source.droppableId],
+        source.index,
+        destination.index
+      );
+    } else {
+      // Move card from hand to field
+      const [updatedSource, updatedDestination] = moveBetweenDroppables(
+        droppableIdMap[source.droppableId],
+        droppableIdMap[destination.droppableId],
+        source,
+        destination
+      );
+      droppableIdMap[source.droppableId] = updatedSource;
+      droppableIdMap[destination.droppableId] = updatedDestination;
+    }
 
     this.gameRef.update({
       [this.playerKey]: this.playerData
     });
   }
-
-  @action.bound
-  onPlayerFieldDragEnd() {}
 
   @action.bound
   decrementTimeRemaining() {
@@ -409,6 +419,47 @@ export default class AppStore {
   }
 
   @computed
+  get phaseIsPlayerPreAttack() {
+    return (
+      this.gameIsActive &&
+      this.gameData.phase === "preAttack" &&
+      this.hasControl
+    );
+  }
+
+  @computed
+  get phaseIsEnemyPreAttack() {
+    return (
+      this.gameIsActive &&
+      this.gameData.phase === "preAttack" &&
+      !this.hasControl
+    );
+  }
+
+  @computed
+  get phaseIsPlayerBlocks() {
+    return (
+      this.gameIsActive && this.gameData.phase === "block" && this.hasControl
+    );
+  }
+
+  @computed
+  get phaseIsEnemyBlocks() {
+    return (
+      this.gameIsActive && this.gameData.phase === "block" && !this.hasControl
+    );
+  }
+
+  @computed
+  get playerHandMessage() {
+    if (this.phaseIsPlayerPreAttack) return "Play cards!";
+    if (this.phaseIsPlayerBlocks) return "Declare blockers!";
+    if (this.phaseIsEnemyPreAttack) return "Enemy playing cards...";
+    if (this.phaseIsEnemyBlocks) return "Enemy declaring blockers...";
+    return "";
+  }
+
+  @computed
   get isUpdatingGame() {
     return this.gameData.gameUpdateToCommit !== null;
   }
@@ -460,3 +511,26 @@ export default class AppStore {
     });
   }
 }
+
+// Helpers
+const reorderDroppable = (list, startIndex, endIndex) => {
+  const result = Array.from(list);
+  const [removed] = result.splice(startIndex, 1);
+  result.splice(endIndex, 0, removed);
+  return result;
+};
+
+const moveBetweenDroppables = (
+  source,
+  destination,
+  droppableSource,
+  droppableDestination
+) => {
+  const sourceClone = Array.from(source);
+  const destClone = Array.from(destination);
+  const [removed] = sourceClone.splice(droppableSource.index, 1);
+
+  destClone.splice(droppableDestination.index, 0, removed);
+
+  return [sourceClone, destClone];
+};
