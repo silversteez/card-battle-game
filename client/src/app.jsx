@@ -41,6 +41,7 @@ const CardContainer = styled.div`
   padding: 8px;
   margin: 4px;
   cursor: pointer;
+  flex: 0 0 auto;
   &:hover {
     background: #5864b5;
   }
@@ -65,6 +66,8 @@ const HandContainer = styled.div`
 const FieldContainer = styled.div`
   padding: 8px;
   display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   width: 100%;
   height: 150px;
 `;
@@ -83,7 +86,11 @@ const Card = observer(({ card }) => {
 
 const DraggableCard = observer(({ card, index, isDragDisabled }) => {
   return (
-    <Draggable draggableId={card.id} index={index} isDragDisabled={isDragDisabled}>
+    <Draggable
+      draggableId={card.id}
+      index={index}
+      isDragDisabled={isDragDisabled}
+    >
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -99,7 +106,12 @@ const DraggableCard = observer(({ card, index, isDragDisabled }) => {
 
 const DraggableCards = observer(({ zone }) => {
   return app.playerData[zone].map((card, index) => (
-    <DraggableCard key={card.id} card={card} index={index} isDragDisabled={zone === "field" && !app.phaseIsPlayerBlocks}/>
+    <DraggableCard
+      key={card.id}
+      card={card}
+      index={index}
+      isDragDisabled={zone === "field" && !app.phaseIsPlayerBlocks}
+    />
   ));
 });
 
@@ -111,6 +123,8 @@ const DroppableHandArea = observer(() => {
           ref={provided.innerRef}
           style={{
             display: "flex",
+            flexWrap: "nowrap",
+            overflowX: "auto",
             padding: 8,
             height: 150,
             overflow: "auto",
@@ -149,6 +163,8 @@ const DroppablePlayerFieldArea = observer(() => {
           ref={provided.innerRef}
           style={{
             display: "flex",
+            flexWrap: "nowrap",
+            overflowX: "auto",
             padding: 8,
             height: 150,
             overflow: "auto",
