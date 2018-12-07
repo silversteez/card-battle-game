@@ -3,6 +3,11 @@ import { observable, action, computed, autorun, toJS } from "mobx";
 import { GAME, USER, ACTIONS } from "./constants";
 import uuid from "./uuid";
 
+// min and max included
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
 class Deck {
   cards = [];
   maxSize = 60;
@@ -16,10 +21,10 @@ class Deck {
   getCard(i) {
     return {
       id: uuid(),
-      name: "creep" + i,
-      attack: 1,
-      health: 3,
-      cost: 1,
+      name: "#" + i,
+      attack: randomInt(1,5),
+      health: randomInt(3,7),
+      cost: randomInt(1,5),
       behaviors: {
         onSummon: [],
         onAttack: [],
@@ -35,8 +40,10 @@ export default class AppStore {
   @observable userId;
   @observable userData = {};
   @observable gameData = {};
+  @observable isDraggingCard = false;
   @observable lastControlTimeout = null;
   @observable controlTimeRemaining = null;
+  lastRound = 0; // Compare lastRound to round to know when to draw a card
 
   constructor() {
     // Initialize Firebase
@@ -164,12 +171,26 @@ export default class AppStore {
   @action.bound
   onGameSnapshot(doc) {
     this.gameData = doc.data();
-    if (this.playerData.hand.length === 0) {
-      this.playerData.hand = this.playerData.deck.slice(0, 6);
-      this.playerData.deck = this.playerData.deck.slice(6);
-      this.updateGameOnServer();
+
+    if (this.gameData.round === 0 && this.playerData.hand.length === 0) {
+      // Draw initial hand
+      this.drawCards(5);
+    } else if (this.hasControl && this.gameData.round > this.lastRound) {
+      // Draw 1 card per turn
+      this.lastRound = this.gameData.round;
+      this.drawCards(1);
     }
     console.log("gameData is", toJS(this.gameData));
+  }
+
+  @action.bound
+  drawCards(numCards) {
+    this.playerData.hand = [
+      ...this.playerData.hand,
+      ...this.playerData.deck.slice(0, numCards)
+    ];
+    this.playerData.deck = this.playerData.deck.slice(numCards);
+    this.updateGameOnServer();
   }
 
   @action.bound
@@ -249,13 +270,7 @@ export default class AppStore {
       if (this.gameData.phase === "preAttack") {
         if (this.playerData.mana >= card.cost) {
           // If can play cards out of hand...
-          this.playerData.mana = this.playerData.mana - card.cost;
-          this.playerData.hand = this.playerData.hand.filter(
-            cardInHand => cardInHand !== card
-          );
-          this.playerData.field.push(card);
-          this.updateGameOnServer();
-          return;
+          // Now done via drag n drop
         }
       }
     }
@@ -272,9 +287,21 @@ export default class AppStore {
     }
   }
 
+  @computed
+  get isHandDropDisabled() {
+    return !this.phaseIsPlayerPreAttack;
+  }
+
+  @action.bound
+  onCardDragStart(draggable) {
+    console.log("dragging", draggable);
+    this.isDraggingCard = true;
+  }
+
   @action.bound
   onCardDragEnd(result) {
-    const { source, destination } = result;
+    this.isDraggingCard = false;
+    const { source, destination, draggableId } = result;
 
     // Drag didn't end on droppable
     if (!destination) {
@@ -305,15 +332,24 @@ export default class AppStore {
       source.droppableId === "player-hand" &&
       destination.droppableId === "player-field"
     ) {
-      // Move card from hand to field
-      const [updatedHand, updatedField] = moveBetweenDroppables(
-        this.playerData.hand,
-        this.playerData.field,
-        source,
-        destination
-      );
-      this.playerData.hand = updatedHand;
-      this.playerData.field = updatedField;
+      // Trying to play a card from hand to field
+      const card = this.playerData.hand.find(card => card.id === draggableId);
+      if (this.playerData.mana >= card.cost) {
+        this.playerData.mana = this.playerData.mana - card.cost;
+
+        // Move card from hand to field
+        const [updatedHand, updatedField] = moveBetweenDroppables(
+          this.playerData.hand,
+          this.playerData.field,
+          source,
+          destination
+        );
+        this.playerData.hand = updatedHand;
+        this.playerData.field = updatedField;
+      } else {
+        // TODO some warning that they don't have enough mana..
+        return;
+      }
     } else {
       return;
     }

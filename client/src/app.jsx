@@ -37,19 +37,19 @@ const UserId = observer(() => {
 
 const CardContainer = styled.div`
   background: #3f51b5;
-  width: 80px;
+  width: 60px;
   padding: 8px;
   margin: 4px;
-  cursor: pointer;
+  //cursor: pointer;
   flex: 0 0 auto;
   &:hover {
-    background: #5864b5;
+    background: #4153ba;
   }
   border: ${props => {
-    if (props.card.willAttack) return "1px solid red";
-    if (props.card.willBlock) return "1px solid blue";
-    return "1px solid transparent";
-  }};
+  if (props.card.willAttack) return "2px solid red";
+  if (props.card.willBlock) return "2px solid #e0e0e0";
+  return "2px solid transparent";
+}};
 `;
 
 const EnemyHandContainer = styled.div`
@@ -157,7 +157,7 @@ const Hand = observer(() => {
 const DroppablePlayerFieldArea = observer(() => {
   if (!app.playerData) return null;
   return (
-    <Droppable droppableId="player-field" direction="horizontal">
+    <Droppable droppableId="player-field" direction="horizontal" isDropDisabled={app.isHandDropDisabled}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -328,7 +328,7 @@ const GameControls = () => {
 const App = observer(() => {
   return (
     <AppContainer>
-      <DragDropContext onDragEnd={app.onCardDragEnd}>
+      <DragDropContext onDragStart={app.onCardDragStart} onDragEnd={app.onCardDragEnd}>
         <UserId />
         <Divider />
         {app.gameIsActive || app.gameIsComplete ? null : <Lobby />}
