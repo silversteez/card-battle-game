@@ -22,9 +22,10 @@ class Deck {
     return {
       id: uuid(),
       name: "#" + i,
-      attack: randomInt(1,5),
-      health: randomInt(3,7),
-      cost: randomInt(1,5),
+      attack: randomInt(1, 5),
+      health: randomInt(3, 7),
+      cost: randomInt(1, 5),
+      damageReceived: 0,
       behaviors: {
         onSummon: [],
         onAttack: [],
@@ -221,13 +222,29 @@ export default class AppStore {
     // CONFIRM BLOCKS
     if (this.gameData.phase === "block") {
       // Calc attack damage
-      let attackDamage = 0;
-      this.enemyData.field.forEach(card => {
+      let damageToPlayer = 0;
+      this.enemyData.field.forEach((card, i) => {
         if (card.willAttack) {
-          attackDamage = attackDamage + card.attack;
+          // See if there is a matching blocker across from it
+          const blockingCard = this.playerData.field[i];
+          if (blockingCard && blockingCard.willBlock) {
+            blockingCard.damageReceived += card.attack;
+            card.damageReceived += blockingCard.attack;
+          } else {
+            damageToPlayer = damageToPlayer + card.attack;
+          }
         }
       });
-      this.playerData.life = this.playerData.life - attackDamage;
+
+      // Remove dead cards
+      this.enemyData.field = this.enemyData.field.filter(
+        card => card.damageReceived < card.health
+      );
+      this.playerData.field = this.playerData.field.filter(
+        card => card.damageReceived < card.health
+      );
+
+      this.playerData.life = this.playerData.life - damageToPlayer;
 
       // Increase mana for next round
       this.playerData.mana =
@@ -288,8 +305,8 @@ export default class AppStore {
   }
 
   @computed
-  get isHandDropDisabled() {
-    return !this.phaseIsPlayerPreAttack;
+  get playableCardsInHand() {
+    return this.playerData.hand.filter(card => card.cost <= this.playerData.mana);
   }
 
   @action.bound

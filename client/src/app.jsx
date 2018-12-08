@@ -35,21 +35,29 @@ const UserId = observer(() => {
   }
 });
 
+const CardText = styled(Typography)`
+  color: ${props => {
+    if (props.card.damageReceived > 0) return "pink";
+    return "white";
+  }};
+`;
+
 const CardContainer = styled.div`
-  background: #3f51b5;
+  background: #525252;
   width: 60px;
   padding: 8px;
   margin: 4px;
-  //cursor: pointer;
+  cursor: ${props => props.isDraggable ? "grab" : "pointer"};
   flex: 0 0 auto;
   &:hover {
-    background: #4153ba;
+    background: #585858;
   }
   border: ${props => {
-  if (props.card.willAttack) return "2px solid red";
-  if (props.card.willBlock) return "2px solid #e0e0e0";
-  return "2px solid transparent";
-}};
+    if (props.card.willAttack) return "2px solid red";
+    if (props.card.willBlock) return "2px solid #e0e0e0";
+    if (props.isDraggable) return "2px solid rgba(255,255,255,0.5)";
+    return "2px solid transparent";
+  }};
 `;
 
 const EnemyHandContainer = styled.div`
@@ -63,33 +71,41 @@ const HandContainer = styled.div`
   right: 0;
 `;
 
-const FieldContainer = styled.div`
-  padding: 8px;
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  width: 100%;
-  height: 150px;
-`;
+const fieldStyles = {
+  display: "flex",
+  flexWrap: "nowrap",
+  overflowX: "auto",
+  padding: 8,
+  height: 150,
+  overflow: "auto",
+  width: "100%",
+  background: "rgba(0, 0, 0, 0.3)"
+};
 
-const Card = observer(({ card }) => {
-  const { name, attack, health, cost } = card;
+const FieldContainer = styled.div(fieldStyles);
+
+const Card = observer(({ card, isDraggable }) => {
+  const { name, attack, health, damageReceived, cost } = card;
   return (
-    <CardContainer card={card} onClick={() => app.onClickCard(card)}>
+    <CardContainer card={card} isDraggable={isDraggable} onClick={() => app.onClickCard(card)}>
       <Typography variant="h6">{cost}</Typography>
       <Typography>{name}</Typography>
       <Typography>{attack} 🗡️</Typography>
-      <Typography>{health} ❤️</Typography>
+      <CardText card={card}>{health - damageReceived} ❤️</CardText>
     </CardContainer>
   );
 });
 
-const DraggableCard = observer(({ card, index, isDragDisabled }) => {
+const DraggableCard = observer(({ card, index, zone }) => {
+  const isDraggable =
+    zone === "hand" &&
+    app.phaseIsPlayerPreAttack &&
+    app.playableCardsInHand.includes(card);
   return (
     <Draggable
       draggableId={card.id}
       index={index}
-      isDragDisabled={isDragDisabled}
+      isDragDisabled={!isDraggable}
     >
       {(provided, snapshot) => (
         <div
@@ -97,7 +113,7 @@ const DraggableCard = observer(({ card, index, isDragDisabled }) => {
           {...provided.draggableProps}
           {...provided.dragHandleProps}
         >
-          <Card card={card} isDragging={snapshot.isDragging} />
+          <Card card={card} isDraggable={isDraggable} isDragging={snapshot.isDragging} />
         </div>
       )}
     </Draggable>
@@ -106,30 +122,21 @@ const DraggableCard = observer(({ card, index, isDragDisabled }) => {
 
 const DraggableCards = observer(({ zone }) => {
   return app.playerData[zone].map((card, index) => (
-    <DraggableCard
-      key={card.id}
-      card={card}
-      index={index}
-      isDragDisabled={zone === "field" && !app.phaseIsPlayerBlocks}
-    />
+    <DraggableCard key={card.id} card={card} index={index} zone={zone} />
   ));
 });
 
 const DroppableHandArea = observer(() => {
   return (
-    <Droppable droppableId="player-hand" direction="horizontal">
+    <Droppable
+      droppableId="player-hand"
+      direction="horizontal"
+      isDropDisabled={true}
+    >
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
-          style={{
-            display: "flex",
-            flexWrap: "nowrap",
-            overflowX: "auto",
-            padding: 8,
-            height: 150,
-            overflow: "auto",
-            width: "100%"
-          }}
+          style={fieldStyles}
           {...provided.droppableProps}
         >
           <DraggableCards zone={"hand"} />
@@ -157,19 +164,14 @@ const Hand = observer(() => {
 const DroppablePlayerFieldArea = observer(() => {
   if (!app.playerData) return null;
   return (
-    <Droppable droppableId="player-field" direction="horizontal" isDropDisabled={app.isHandDropDisabled}>
+    <Droppable
+      droppableId="player-field"
+      direction="horizontal"
+    >
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
-          style={{
-            display: "flex",
-            flexWrap: "nowrap",
-            overflowX: "auto",
-            padding: 8,
-            height: 150,
-            overflow: "auto",
-            width: "100%"
-          }}
+          style={fieldStyles}
           {...provided.droppableProps}
         >
           <DraggableCards zone={"field"} />
@@ -328,7 +330,10 @@ const GameControls = () => {
 const App = observer(() => {
   return (
     <AppContainer>
-      <DragDropContext onDragStart={app.onCardDragStart} onDragEnd={app.onCardDragEnd}>
+      <DragDropContext
+        onDragStart={app.onCardDragStart}
+        onDragEnd={app.onCardDragEnd}
+      >
         <UserId />
         <Divider />
         {app.gameIsActive || app.gameIsComplete ? null : <Lobby />}
