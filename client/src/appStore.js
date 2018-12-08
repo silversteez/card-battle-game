@@ -269,14 +269,24 @@ export default class AppStore {
         card.willBlock = false;
       });
 
+      // Check for dead players
+      let gameUpdateToCommit = null;
+      if (this.playerData.life <= 0 || this.enemyData.life <= 0) {
+        // For now this just forces server to end the game properly
+        gameUpdateToCommit = {
+          action: ACTIONS.pass_turn
+        };
+      }
+
       this.gameRef.update({
         phase,
         round,
         controlTimeOut,
         [this.playerKey]: this.playerData,
-        [this.enemyKey]: this.enemyData
+        [this.enemyKey]: this.enemyData,
+        gameUpdateToCommit
       });
-      return;
+      // return;
     }
   }
 
@@ -306,7 +316,9 @@ export default class AppStore {
 
   @computed
   get playableCardsInHand() {
-    return this.playerData.hand.filter(card => card.cost <= this.playerData.mana);
+    return this.playerData.hand.filter(
+      card => card.cost <= this.playerData.mana
+    );
   }
 
   @action.bound
