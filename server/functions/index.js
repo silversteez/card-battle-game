@@ -105,9 +105,16 @@ exports.updateUser = functions.firestore
   .document("users/{userId}")
   .onUpdate((change, context) => {
     const userId = context.params.userId;
-
     const user = change.after.data();
     const prevUser = change.before.data();
+
+    console.log(`User: ${userId}, state: ${user.state}`);
+
+    // Trying to catch weird bug
+    if (!userId || !user || !user.deck)  {
+      console.log('No userId? No user? No deck? WHAT?');
+      return null;
+    }
 
     // This is crucial to prevent infinite loops.
     if (user.state === prevUser.state) return null;
@@ -132,7 +139,7 @@ exports.updateUser = functions.firestore
               gameId: gameId,
               state: USER.found_game
             });
-            console.log("FOUND GAME!");
+            console.log(`User: ${userId}, FOUND GAME!`);
             return true;
           }
           return null;
@@ -144,7 +151,7 @@ exports.updateUser = functions.firestore
 
       // If we're attempting reconnect on app load and we didn't find a game, enter menu state
       if (!foundExistingGame && user.state === "attempt_reconnect") {
-        console.log("No game to reconnect to, enter menu state!");
+        console.log(`User: ${userId}, No game to reconnect to, enter menu state!`);
         return trs.update(db.collection("users").doc(userId), {
           state: USER.menu
         });
@@ -166,6 +173,9 @@ exports.updateUser = functions.firestore
             const users = game.users.concat([userId]);
             const full = users.length === 2;
             const player2 = Object.assign(game.player2, {id: userId, deck: user.deck});
+            if (userId === null || user.deck === null) {
+              console.log('BUG null issue', user);
+            }
             const controlTimeLimit = 40;
             const date = new Date();
             const newGameData = {
@@ -178,6 +188,7 @@ exports.updateUser = functions.firestore
             };
             trs.update(gameSnapshot.ref, newGameData);
             gameId = gameSnapshot.id;
+            console.log(`User: ${userId}, joined game`);
           } else {
             // no game was found, create a new game with the player
             const users = [userId];
@@ -211,6 +222,7 @@ exports.updateUser = functions.firestore
               gameUpdateToCommit: null
             });
             gameId = gameRef.id;
+            console.log(`User: ${userId}, created game`);
           }
           // then add a reference to the game in the player document
           return trs.update(db.collection("users").doc(userId), {
