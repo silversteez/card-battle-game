@@ -15,15 +15,24 @@ const AppContainer = styled.div`
 `;
 
 const StyledButton = styled(Button)`
-  margin: 8px;
-  padding: 8px;
+  margin: 0 8px;
 `;
 
 const UserId = observer(() => {
   if (app.userId) {
     return (
-      <div>
+      <div style={{display:"flex", justifyContent: "space-between"}}>
         <Typography>{app.userId}</Typography>
+        {!app.gameIsComplete && (
+          <StyledButton
+            variant="contained"
+            color="secondary"
+            onClick={app.concedeGame}
+            disabled={app.isUpdatingGame}
+          >
+            Concede
+          </StyledButton>
+        )}
       </div>
     );
   } else {
@@ -45,9 +54,9 @@ const CardText = styled(Typography)`
 const CardContainer = styled.div`
   background: #525252;
   width: 60px;
-  padding: 8px;
+  padding: 4px;
   margin: 4px;
-  cursor: ${props => props.isDraggable ? "grab" : "pointer"};
+  cursor: ${props => (props.isDraggable ? "grab" : "pointer")};
   flex: 0 0 auto;
   &:hover {
     background: #585858;
@@ -87,9 +96,12 @@ const FieldContainer = styled.div(fieldStyles);
 const Card = observer(({ card, isDraggable }) => {
   const { name, attack, health, damageReceived, cost } = card;
   return (
-    <CardContainer card={card} isDraggable={isDraggable} onClick={() => app.onClickCard(card)}>
+    <CardContainer
+      card={card}
+      isDraggable={isDraggable}
+      onClick={() => app.onClickCard(card)}
+    >
       <Typography variant="h6">{cost}</Typography>
-      <Typography>{name}</Typography>
       <Typography>{attack} 🗡️</Typography>
       <CardText card={card}>{health - damageReceived} ❤️</CardText>
     </CardContainer>
@@ -113,7 +125,11 @@ const DraggableCard = observer(({ card, index, zone }) => {
           {...provided.draggableProps}
           {...provided.dragHandleProps}
         >
-          <Card card={card} isDraggable={isDraggable} isDragging={snapshot.isDragging} />
+          <Card
+            card={card}
+            isDraggable={isDraggable}
+            isDragging={snapshot.isDragging}
+          />
         </div>
       )}
     </Draggable>
@@ -147,16 +163,41 @@ const DroppableHandArea = observer(() => {
   );
 });
 
+const Area = styled.div`
+  display: flex;
+`;
+
+const ButtonArea = styled.div``;
+
 const Hand = observer(() => {
   if (!app.playerData) return null;
   return (
     <HandContainer>
+      <GameInfo />
       <Timer active={app.hasControl} />
-      <Typography>{app.playerHandMessage}</Typography>
-      <Typography>Mana: {app.playerData.mana}</Typography>
-      <Typography>Life: {app.playerData.life}</Typography>
-      <GameControls />
-      <DroppableHandArea />
+      <Area>
+        <DroppableHandArea />
+        <ButtonArea>
+          {!app.gameIsComplete && !app.hasControl && (
+            <div>
+              <Typography>ENEMY TURN...</Typography>
+            </div>
+          )}
+          <Typography>{app.playerHandMessage}</Typography>
+          <Typography>Mana: {app.playerData.mana}</Typography>
+          <Typography>Life: {app.playerData.life}</Typography>
+          {app.hasControl && (
+            <StyledButton
+              variant="contained"
+              color="primary"
+              onClick={app.onConfirm}
+              disabled={app.isUpdatingGame}
+            >
+              CONFIRM
+            </StyledButton>
+          )}
+        </ButtonArea>
+      </Area>
     </HandContainer>
   );
 });
@@ -164,10 +205,7 @@ const Hand = observer(() => {
 const DroppablePlayerFieldArea = observer(() => {
   if (!app.playerData) return null;
   return (
-    <Droppable
-      droppableId="player-field"
-      direction="horizontal"
-    >
+    <Droppable droppableId="player-field" direction="horizontal">
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -266,46 +304,10 @@ const Timer = observer(({ active }) => {
   );
 });
 
-const GameControls = () => {
+const GameInfo = () => {
   const disabled = app.isUpdatingGame;
   return (
     <Fragment>
-      {app.hasControl && (
-        <Fragment>
-          <Divider />
-          <StyledButton
-            variant="contained"
-            color="primary"
-            onClick={app.onConfirm}
-            disabled={disabled}
-          >
-            CONFIRM
-          </StyledButton>
-          <StyledButton
-            variant="contained"
-            color="secondary"
-            onClick={app.passTurn}
-            disabled={disabled}
-          >
-            PASS TURN
-          </StyledButton>
-        </Fragment>
-      )}
-      {!app.gameIsComplete && !app.hasControl && (
-        <div>
-          <Typography>ENEMY TURN...</Typography>
-        </div>
-      )}
-      {!app.gameIsComplete && (
-        <StyledButton
-          variant="contained"
-          color="secondary"
-          onClick={app.concedeGame}
-          disabled={disabled}
-        >
-          CONCEDE
-        </StyledButton>
-      )}
       {app.gameIsComplete && (
         <Fragment>
           <div>

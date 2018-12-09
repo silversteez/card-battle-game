@@ -204,19 +204,43 @@ export default class AppStore {
   onConfirm() {
     // CONFIRM ATTACKS
     if (this.gameData.phase === "preAttack") {
-      const phase = "block";
-      const hasControl = this.enemyKey;
-      const controlTimeLimit = 25;
-      const date = new Date();
-      const controlTimeOut = date.setSeconds(
-        date.getSeconds() + controlTimeLimit
-      );
-      this.gameRef.update({
-        phase,
-        hasControl,
-        controlTimeOut
-      });
-      return;
+      if (this.playerData.field.find(card => card.willAttack)) {
+        // If there are any attackers, start enemy block phase
+        const phase = "block";
+        const hasControl = this.enemyKey;
+        const controlTimeLimit = 25;
+        const date = new Date();
+        const controlTimeOut = date.setSeconds(
+          date.getSeconds() + controlTimeLimit
+        );
+        this.gameRef.update({
+          phase,
+          hasControl,
+          controlTimeOut
+        });
+        return;
+      } else {
+        // Just pass control to enemy
+        const hasControl = this.enemyKey;
+        const phase = "preAttack";
+        const controlTimeLimit = 40;
+        const date = new Date();
+        const controlTimeOut = date.setSeconds(
+          date.getSeconds() + controlTimeLimit
+        );
+        const round = this.gameData.round + 1;
+        // Increase mana for next round
+        this.enemyData.mana =
+          this.gameData.round < 10 ? this.gameData.round + 1 : 10;
+        this.gameRef.update({
+          phase,
+          round,
+          hasControl,
+          controlTimeOut,
+          controlTimeLimit,
+          [this.enemyKey]: this.enemyData,
+        });
+      }
     }
 
     // CONFIRM BLOCKS
@@ -282,6 +306,7 @@ export default class AppStore {
         phase,
         round,
         controlTimeOut,
+        controlTimeLimit,
         [this.playerKey]: this.playerData,
         [this.enemyKey]: this.enemyData,
         gameUpdateToCommit
