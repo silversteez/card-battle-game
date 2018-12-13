@@ -21,7 +21,7 @@ const StyledButton = styled(Button)`
 const UserId = observer(() => {
   if (app.userId) {
     return (
-      <div style={{display:"flex", justifyContent: "space-between"}}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
         <Typography>{app.userId}</Typography>
         {!app.gameIsComplete && (
           <StyledButton
@@ -54,6 +54,7 @@ const CardText = styled(Typography)`
 const CardContainer = styled.div`
   background: #525252;
   width: 60px;
+  height: 80px;
   padding: 4px;
   margin: 4px;
   cursor: ${props => (props.isDraggable ? "grab" : "pointer")};
@@ -83,13 +84,34 @@ const HandContainer = styled.div`
 const fieldStyles = {
   display: "flex",
   flexWrap: "nowrap",
-  overflowX: "auto",
   padding: 8,
-  height: 150,
-  overflow: "auto",
+  height: 100,
   width: "100%",
-  background: "rgba(0, 0, 0, 0.3)"
+  background: "#262626"
 };
+
+const getDroppableFieldStyles = (snapshot) => {
+  if (snapshot.isDraggingOver) {
+    return {
+      ...fieldStyles,
+      background: "blue"
+    }
+  }
+  return fieldStyles;
+};
+
+const handStyles = {
+  ...fieldStyles,
+  overflowX: "auto"
+};
+
+const BothFieldsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+  width: 100%;
+  background: #262626;
+`;
 
 const FieldContainer = styled.div(fieldStyles);
 
@@ -101,7 +123,7 @@ const Card = observer(({ card, isDraggable }) => {
       isDraggable={isDraggable}
       onClick={() => app.onClickCard(card)}
     >
-      <Typography variant="h6">{cost}</Typography>
+      <Typography>{cost} 💰</Typography>
       <Typography>{attack} 🗡️</Typography>
       <CardText card={card}>{health - damageReceived} ❤️</CardText>
     </CardContainer>
@@ -152,7 +174,7 @@ const DroppableHandArea = observer(() => {
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
-          style={fieldStyles}
+          style={handStyles}
           {...provided.droppableProps}
         >
           <DraggableCards zone={"hand"} />
@@ -167,7 +189,9 @@ const Area = styled.div`
   display: flex;
 `;
 
-const ButtonArea = styled.div``;
+const ButtonArea = styled.div`
+  padding: 8px;
+`;
 
 const Hand = observer(() => {
   if (!app.playerData) return null;
@@ -178,11 +202,6 @@ const Hand = observer(() => {
       <Area>
         <DroppableHandArea />
         <ButtonArea>
-          {!app.gameIsComplete && !app.hasControl && (
-            <div>
-              <Typography>ENEMY TURN...</Typography>
-            </div>
-          )}
           <Typography>{app.playerHandMessage}</Typography>
           <Typography>Mana: {app.playerData.mana}</Typography>
           <Typography>Life: {app.playerData.life}</Typography>
@@ -209,7 +228,7 @@ const DroppablePlayerFieldArea = observer(() => {
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
-          style={fieldStyles}
+          style={getDroppableFieldStyles(snapshot)}
           {...provided.droppableProps}
         >
           <DraggableCards zone={"field"} />
@@ -341,8 +360,10 @@ const App = observer(() => {
         {app.gameIsActive || app.gameIsComplete ? null : <Lobby />}
         <Divider />
         <EnemyHand />
-        <Field playerData={app.enemyData} />
-        <DroppablePlayerFieldArea />
+        <BothFieldsContainer>
+          <Field playerData={app.enemyData} />
+          <DroppablePlayerFieldArea />
+        </BothFieldsContainer>
         <Hand />
       </DragDropContext>
     </AppContainer>

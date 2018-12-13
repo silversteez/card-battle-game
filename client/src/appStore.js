@@ -173,6 +173,22 @@ export default class AppStore {
   onGameSnapshot(doc) {
     this.gameData = doc.data();
 
+    // Check for broken game state...
+    if (
+      this.gameData.full &&
+      (this.gameData.player1.id === null || this.gameData.player2.id === null)
+    ) {
+      alert('exiting corrupt game');
+      this.gameRef.update({
+        state: "complete"
+      });
+      this.userRef.update({
+        state: USER.menu,
+        gameId: null
+      });
+      return;
+    }
+
     if (this.gameData.round === 0 && this.playerData.hand.length === 0) {
       // Draw initial hand
       this.drawCards(5);
@@ -238,7 +254,7 @@ export default class AppStore {
           hasControl,
           controlTimeOut,
           controlTimeLimit,
-          [this.enemyKey]: this.enemyData,
+          [this.enemyKey]: this.enemyData
         });
       }
     }
@@ -452,13 +468,13 @@ export default class AppStore {
 
   @computed
   get playerData() {
-    if (this.gameData.player1) {
+    // Check if gameData has stuff in it
+    if (this.gameData.full) {
+      // Return matching player data
       if (this.gameData.player1.id === this.userId) {
         return this.gameData.player1;
       } else if (this.gameData.player2.id === this.userId) {
         return this.gameData.player2;
-      } else {
-        throw new Error("Neither player id matches userId!");
       }
     }
     return null;
