@@ -1,12 +1,14 @@
 import firebase from "firebase";
 import { observable, action, computed, autorun, toJS } from "mobx";
-import { GAME, USER, ACTIONS } from "./constants";
+import { GAME, USER, ACTIONS, PHASE } from "./constants";
 import uuid from "./uuid";
 
 // min and max included
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1) + min);
 }
+
+const delay = ms => new Promise(res => setTimeout(() => res(), ms));
 
 class Deck {
   cards = [];
@@ -140,7 +142,7 @@ export default class AppStore {
       this.gameData = {};
       return;
     }
-    console.log("gameId is", this.userData.gameId);
+    //console.log("gameId is", this.userData.gameId);
     this.gameRef = this.gamesRef.doc(this.userData.gameId);
     this.unsubToGame = this.gameRef.onSnapshot(this.onGameSnapshot);
   };
@@ -178,9 +180,9 @@ export default class AppStore {
       this.gameData.full &&
       (this.gameData.player1.id === null || this.gameData.player2.id === null)
     ) {
-      alert('exiting corrupt game');
+      alert("exiting corrupt game");
       this.gameRef.update({
-        state: "complete"
+        state: GAME.complete
       });
       this.userRef.update({
         state: USER.menu,
@@ -189,6 +191,12 @@ export default class AppStore {
       return;
     }
 
+    // Anything below this requires an active game
+    if (!this.gameIsActive) {
+      return;
+    }
+
+    // Check for draw card steps
     if (this.gameData.round === 0 && this.playerData.hand.length === 0) {
       // Draw initial hand
       this.drawCards(5);
@@ -197,7 +205,13 @@ export default class AppStore {
       this.lastRound = this.gameData.round;
       this.drawCards(1);
     }
-    console.log("gameData is", toJS(this.gameData));
+
+    // Check for show attack
+    if (this.gameData.phase === PHASE.show_attack) {
+      this.showAttackSequence();
+    }
+
+    //console.log("gameData is", toJS(this.gameData));
   }
 
   @action.bound
@@ -213,16 +227,16 @@ export default class AppStore {
   @action.bound
   onUserSnapshot(doc) {
     this.userData = doc.data();
-    console.log("userData is", toJS(this.userData));
+    //console.log("userData is", toJS(this.userData));
   }
 
   @action.bound
   onConfirm() {
     // CONFIRM ATTACKS
-    if (this.gameData.phase === "preAttack") {
+    if (this.gameData.phase === PHASE.pre_attack) {
       if (this.playerData.field.find(card => card.willAttack)) {
         // If there are any attackers, start enemy block phase
-        const phase = "block";
+        const phase = PHASE.block;
         const hasControl = this.enemyKey;
         const controlTimeLimit = 25;
         const date = new Date();
@@ -238,7 +252,7 @@ export default class AppStore {
       } else {
         // Just pass control to enemy
         const hasControl = this.enemyKey;
-        const phase = "preAttack";
+        const phase = PHASE.pre_attack;
         const controlTimeLimit = 40;
         const date = new Date();
         const controlTimeOut = date.setSeconds(
@@ -260,74 +274,142 @@ export default class AppStore {
     }
 
     // CONFIRM BLOCKS
-    if (this.gameData.phase === "block") {
-      // Calc attack damage
-      let damageToPlayer = 0;
-      this.enemyData.field.forEach((card, i) => {
-        if (card.willAttack) {
-          // See if there is a matching blocker across from it
-          const blockingCard = this.playerData.field[i];
-          if (blockingCard && blockingCard.willBlock) {
-            blockingCard.damageReceived += card.attack;
-            card.damageReceived += blockingCard.attack;
-          } else {
-            damageToPlayer = damageToPlayer + card.attack;
-          }
+    if (this.gameData.phase === PHASE.block) {
+      // Set phase and then we'll show attack sequence
+      this.gameRef.update({
+        phase: PHASE.show_attack
+      });
+      // Don't forget to add return statement if we add more confirmations
+      // return;
+    }
+  }
+
+  // TODO this needs to choose who is "player" and "enemy" based on where the code is running!
+  @action.bound
+  async showAttackSequence() {
+    // BOTH players calculate and animate the attacks locally and then compare results on the server and if
+    // they don't match, then we know there is a cheater... an idea to try out...
+    let blockingPlayerData, attackingPlayerData;
+    let blockingPlayerKey, attackingPlayerKey;
+    if (this.gameData.hasControl === this.playerKey) {
+      console.log(`${this.playerKey} has control`);
+      blockingPlayerKey = this.playerKey;
+      attackingPlayerKey = this.enemyKey;
+      blockingPlayerData = this.playerData;
+      attackingPlayerData = this.enemyData;
+    } else {
+      console.log(`${this.playerKey} does not have control`);
+      blockingPlayerKey = this.enemyKey;
+      attackingPlayerKey = this.playerKey;
+      blockingPlayerData = this.enemyData;
+      attackingPlayerData = this.playerData;
+    }
+
+    console.log("starting sequence...");
+    await delay(1000);
+
+    // Calc attack damage
+    let damageToPlayer = 0;
+    for (let i = 0; i < attackingPlayerData.field.length; i++) {
+      let card = attackingPlayerData.field[i];
+      if (card.willAttack) {
+        // See if there is a matching blocker across from it
+        const blockingCard = blockingPlayerData.field[i];
+        if (blockingCard && blockingCard.willBlock) {
+          blockingCard.damageReceived += card.attack;
+          card.damageReceived += blockingCard.attack;
+          blockingCard.willBlock = false;
+        } else {
+          damageToPlayer = damageToPlayer + card.attack;
         }
-      });
-
-      // Remove dead cards
-      this.enemyData.field = this.enemyData.field.filter(
-        card => card.damageReceived < card.health
-      );
-      this.playerData.field = this.playerData.field.filter(
-        card => card.damageReceived < card.health
-      );
-
-      this.playerData.life = this.playerData.life - damageToPlayer;
-
-      // Increase mana for next round
-      this.playerData.mana =
-        this.gameData.round < 10 ? this.gameData.round + 1 : 10;
-
-      // Set phase and KEEP control (for now)
-      const phase = "preAttack";
-      const controlTimeLimit = 40;
-      const date = new Date();
-      const controlTimeOut = date.setSeconds(
-        date.getSeconds() + controlTimeLimit
-      );
-      const round = this.gameData.round + 1;
-
-      // Reset field state
-      this.playerData.field.forEach(card => {
-        card.willAttack = false;
-        card.willBlock = false;
-      });
-      this.enemyData.field.forEach(card => {
-        card.willAttack = false;
-        card.willBlock = false;
-      });
-
-      // Check for dead players
-      let gameUpdateToCommit = null;
-      if (this.playerData.life <= 0 || this.enemyData.life <= 0) {
-        // For now this just forces server to end the game properly
-        gameUpdateToCommit = {
-          action: ACTIONS.pass_turn
-        };
+        console.log(`card ${i} attacked`);
+        await delay(1000);
       }
+    }
 
+    console.log(`remove dead cards`);
+    await delay(1000);
+    // Remove dead cards
+    attackingPlayerData.field = attackingPlayerData.field.filter(
+      card => card.damageReceived < card.health
+    );
+    blockingPlayerData.field = blockingPlayerData.field.filter(
+      card => card.damageReceived < card.health
+    );
+
+    console.log("adjust player life");
+    await delay(1000);
+    blockingPlayerData.life = blockingPlayerData.life - damageToPlayer;
+
+    // Increase mana for next round
+    blockingPlayerData.mana =
+      this.gameData.round < 10 ? this.gameData.round + 1 : 10;
+
+    // Set phase and KEEP control (for now)
+    const phase = PHASE.pre_attack;
+    const controlTimeLimit = 40;
+    const date = new Date();
+    const controlTimeOut = date.setSeconds(
+      date.getSeconds() + controlTimeLimit
+    );
+    const round = this.gameData.round + 1;
+
+    // Reset field state
+    blockingPlayerData.field.forEach(card => {
+      card.willAttack = false;
+      card.willBlock = false;
+    });
+    attackingPlayerData.field.forEach(card => {
+      card.willAttack = false;
+      card.willBlock = false;
+    });
+
+    console.log("field reset");
+    await delay(1000);
+
+    // Check for dead players
+    let gameUpdateToCommit = null;
+    if (blockingPlayerData.life <= 0 || attackingPlayerData.life <= 0) {
+      // For now this just forces server to end the game properly
+      gameUpdateToCommit = {
+        action: ACTIONS.pass_turn
+      };
+    }
+
+    console.log("attack sequence completed by:", this.playerKey);
+    // For now, skip server cheating verification and just send results from player1
+    if (this.playerKey === "player1") {
+      console.log(`${this.playerKey} is updating gameRef`);
+      console.log(`blockingPlayerKey - ${blockingPlayerKey}`);
+      console.log(`attackingPlayerKey - ${attackingPlayerKey}`);
+      console.log(`blockingPlayerData - `,toJS(blockingPlayerData));
+      console.log(`attackingPlayerData - `,toJS(attackingPlayerData));
       this.gameRef.update({
         phase,
         round,
         controlTimeOut,
         controlTimeLimit,
-        [this.playerKey]: this.playerData,
-        [this.enemyKey]: this.enemyData,
+        [blockingPlayerKey]: blockingPlayerData,
+        [attackingPlayerKey]: attackingPlayerData,
         gameUpdateToCommit
       });
-      // return;
+    }
+  }
+
+  @action.bound
+  handleKeyDown({ key }) {
+    if (key === "a" || key === "A") {
+      if (this.hasControl && this.phaseIsPlayerPreAttack) {
+        this.gameRef.update({
+          [this.playerKey]: {
+            ...this.playerData,
+            field: this.playerData.field.map(card => {
+              card.willAttack = true;
+              return card;
+            })
+          }
+        });
+      }
     }
   }
 
@@ -335,7 +417,7 @@ export default class AppStore {
   onClickCard(card) {
     if (!this.hasControl) return;
     if (this.playerData.hand.includes(card)) {
-      if (this.gameData.phase === "preAttack") {
+      if (this.gameData.phase === PHASE.pre_attack) {
         if (this.playerData.mana >= card.cost) {
           // If can play cards out of hand...
           // Now done via drag n drop
@@ -343,12 +425,12 @@ export default class AppStore {
       }
     }
     if (this.playerData.field.includes(card)) {
-      if (this.gameData.phase === "preAttack") {
+      if (this.gameData.phase === PHASE.pre_attack) {
         card.willAttack = !card.willAttack;
         this.updateGameOnServer();
         return;
       }
-      if (this.gameData.phase === "block") {
+      if (this.gameData.phase === PHASE.block) {
         card.willBlock = !card.willBlock;
         this.updateGameOnServer();
       }
@@ -364,7 +446,7 @@ export default class AppStore {
 
   @action.bound
   onCardDragStart(draggable) {
-    console.log("dragging", draggable);
+    //console.log("dragging", draggable);
     this.isDraggingCard = true;
   }
 
@@ -435,6 +517,11 @@ export default class AppStore {
     if (!this.gameData.controlTimeOut) {
       this.lastControlTimeout = null;
       this.controlTimeRemaining = null;
+      return;
+    }
+
+    // Animating attacks, ignore timer
+    if (this.gameData.phase === PHASE.show_attack) {
       return;
     }
 
@@ -512,7 +599,11 @@ export default class AppStore {
 
   @computed
   get hasControl() {
-    return this.gameIsActive && this.gameData.hasControl === this.playerKey;
+    return (
+      this.gameIsActive &&
+      this.gameData.hasControl === this.playerKey &&
+      !this.phaseIsShowAttack
+    );
   }
 
   @computed
@@ -538,10 +629,15 @@ export default class AppStore {
   }
 
   @computed
+  get phaseIsShowAttack() {
+    return this.gameIsActive && this.gameData.phase === PHASE.show_attack;
+  }
+
+  @computed
   get phaseIsPlayerPreAttack() {
     return (
       this.gameIsActive &&
-      this.gameData.phase === "preAttack" &&
+      this.gameData.phase === PHASE.pre_attack &&
       this.hasControl
     );
   }
@@ -550,7 +646,7 @@ export default class AppStore {
   get phaseIsEnemyPreAttack() {
     return (
       this.gameIsActive &&
-      this.gameData.phase === "preAttack" &&
+      this.gameData.phase === PHASE.pre_attack &&
       !this.hasControl
     );
   }
@@ -558,14 +654,18 @@ export default class AppStore {
   @computed
   get phaseIsPlayerBlocks() {
     return (
-      this.gameIsActive && this.gameData.phase === "block" && this.hasControl
+      this.gameIsActive &&
+      this.gameData.phase === PHASE.block &&
+      this.hasControl
     );
   }
 
   @computed
   get phaseIsEnemyBlocks() {
     return (
-      this.gameIsActive && this.gameData.phase === "block" && !this.hasControl
+      this.gameIsActive &&
+      this.gameData.phase === PHASE.block &&
+      !this.hasControl
     );
   }
 
@@ -628,6 +728,11 @@ export default class AppStore {
         action: ACTIONS.concede
       }
     });
+  }
+
+  @computed
+  get jsGameData() {
+    return toJS(this.gameData);
   }
 }
 

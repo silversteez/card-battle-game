@@ -370,4 +370,6 @@ const App = observer(() => {
   );
 });
 
+document.addEventListener("keydown", app.handleKeyDown);
+
 export default App;

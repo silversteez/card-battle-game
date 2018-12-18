@@ -16,3 +16,9 @@ exports.ACTIONS = {
   attack: "attack",
   concede: "concede"
 };
+
+exports.PHASE = {
+  pre_attack: "pre_attack",
+  show_attack: "show_attack",
+  block: "block",
+};

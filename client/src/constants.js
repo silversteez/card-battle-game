@@ -16,3 +16,9 @@ export const ACTIONS = {
   attack: "attack",
   concede: "concede"
 };
+
+export const PHASE = {
+  pre_attack: "preAttack",
+  show_attack: "show_attack",
+  block: "block",
+};

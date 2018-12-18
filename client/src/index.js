@@ -48,10 +48,6 @@ const Root = () => (
 const rootElement = document.getElementById("root");
 ReactDOM.render(<Root />, rootElement);
 
-if (module.hot) {
-  module.hot.accept();
-}
-
 // const render = Component => {
 //   return ReactDOM.render(
 //     <Provider store={store}>

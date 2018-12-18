@@ -1,4 +1,4 @@
-const { GAME, USER, ACTIONS } = require("./constants");
+const { GAME, USER, ACTIONS, PHASE } = require("./constants");
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -48,7 +48,7 @@ exports.onGameUpdate = functions.firestore
         const date = new Date();
         enemyData.mana = round < 10 ? round : 10;
         round++;
-        phase = "preAttack";
+        phase = PHASE.pre_attack;
         controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
         // Reset field state
         playerData.field.forEach(card => (card.willAttack = false));
@@ -219,7 +219,7 @@ exports.updateUser = functions.firestore
             users: users,
             hasControl: "player1",
             round: 0,
-            phase: "preAttack",
+            phase: PHASE.pre_attack,
             controlTimeLimit: null,
             controlTimeOut: null,
             player1: {
