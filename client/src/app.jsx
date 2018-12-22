@@ -52,15 +52,20 @@ const CardText = styled(Typography)`
 `;
 
 const CardContainer = styled.div`
-  background: #525252;
+  background: ${props => {
+    if (props.card.isAttacking) return "red";
+    if (props.card.isBlocking) return "grey";
+    return "#585858";
+  }};
   width: 60px;
   height: 80px;
   padding: 4px;
   margin: 4px;
   cursor: ${props => (props.isDraggable ? "grab" : "pointer")};
   flex: 0 0 auto;
+  transition: background-color 1s;
   &:hover {
-    background: #585858;
+    background: #626262;
   }
   border: ${props => {
     if (props.card.willAttack) return "2px solid red";
@@ -90,12 +95,12 @@ const fieldStyles = {
   background: "#262626"
 };
 
-const getDroppableFieldStyles = (snapshot) => {
+const getDroppableFieldStyles = snapshot => {
   if (snapshot.isDraggingOver) {
     return {
       ...fieldStyles,
-      background: "blue"
-    }
+      background: "#2d2d2d"
+    };
   }
   return fieldStyles;
 };
@@ -116,7 +121,7 @@ const BothFieldsContainer = styled.div`
 const FieldContainer = styled.div(fieldStyles);
 
 const Card = observer(({ card, isDraggable }) => {
-  const { name, attack, health, damageReceived, cost } = card;
+  const { isAttacking, isBlocking, name, attack, health, damageReceived, cost } = card;
   return (
     <CardContainer
       card={card}

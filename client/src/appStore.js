@@ -34,7 +34,9 @@ class Deck {
         onDeath: []
       },
       willAttack: false,
-      willBlock: false
+      willBlock: false,
+      isAttacking: false,
+      isBlocking: false
     };
   }
 }
@@ -284,11 +286,12 @@ export default class AppStore {
     }
   }
 
-  // TODO this needs to choose who is "player" and "enemy" based on where the code is running!
+
+  // BOTH players calculate and animate the attacks locally and then compare results on the server and if
+  // they don't match, then we know there is a cheater... an idea to try out...
   @action.bound
   async showAttackSequence() {
-    // BOTH players calculate and animate the attacks locally and then compare results on the server and if
-    // they don't match, then we know there is a cheater... an idea to try out...
+    // Needs to choose who is "player" and "enemy" based on where the code is running!
     let blockingPlayerData, attackingPlayerData;
     let blockingPlayerKey, attackingPlayerKey;
     if (this.gameData.hasControl === this.playerKey) {
@@ -313,14 +316,27 @@ export default class AppStore {
     for (let i = 0; i < attackingPlayerData.field.length; i++) {
       let card = attackingPlayerData.field[i];
       if (card.willAttack) {
+        // Enable attacking visuals
+        card.isAttacking = true;
         // See if there is a matching blocker across from it
         const blockingCard = blockingPlayerData.field[i];
         if (blockingCard && blockingCard.willBlock) {
+          // Enable blocking visuals
+          blockingCard.isBlocking = true;
+          await delay(1000);
+          // Damage calc
           blockingCard.damageReceived += card.attack;
           card.damageReceived += blockingCard.attack;
-          blockingCard.willBlock = false;
+          await delay(1000);
+          // Update visuals
+          this.resetCard(blockingCard);
+          this.resetCard(card);
         } else {
+          await delay(1000);
           damageToPlayer = damageToPlayer + card.attack;
+          await delay(1000);
+          // Update visuals
+          this.resetCard(card);
         }
         console.log(`card ${i} attacked`);
         await delay(1000);
@@ -355,14 +371,8 @@ export default class AppStore {
     const round = this.gameData.round + 1;
 
     // Reset field state
-    blockingPlayerData.field.forEach(card => {
-      card.willAttack = false;
-      card.willBlock = false;
-    });
-    attackingPlayerData.field.forEach(card => {
-      card.willAttack = false;
-      card.willBlock = false;
-    });
+    blockingPlayerData.field.forEach(this.resetCard);
+    attackingPlayerData.field.forEach(this.resetCard);
 
     console.log("field reset");
     await delay(1000);
@@ -728,6 +738,14 @@ export default class AppStore {
         action: ACTIONS.concede
       }
     });
+  }
+
+  @action.bound
+  resetCard(card) {
+    card.willAttack = false;
+    card.willBlock = false;
+    card.isAttacking = false;
+    card.isBlocking = false;
   }
 
   @computed
