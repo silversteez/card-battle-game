@@ -5,6 +5,7 @@ import Button from "@material-ui/core/Button/Button";
 import Typography from "@material-ui/core/Typography/Typography";
 import LinearProgress from "@material-ui/core/LinearProgress/LinearProgress";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { Spring, config } from "react-spring";
 import AppStore from "./appStore";
 
 const app = new AppStore();
@@ -120,9 +121,19 @@ const BothFieldsContainer = styled.div`
 
 const FieldContainer = styled.div(fieldStyles);
 
-const Card = observer(({ card, isDraggable }) => {
-  const { isAttacking, isBlocking, name, attack, health, damageReceived, cost } = card;
-  return (
+const Card = observer(({ card, zone, isDraggable }) => {
+  const {
+    isAttacking,
+    isBlocking,
+    name,
+    attack,
+    health,
+    damageReceived,
+    cost
+  } = card;
+  const isAnimating = isBlocking || isAttacking;
+
+  const cardContainer = (
     <CardContainer
       card={card}
       isDraggable={isDraggable}
@@ -132,6 +143,25 @@ const Card = observer(({ card, isDraggable }) => {
       <Typography>{attack} 🗡️</Typography>
       <CardText card={card}>{health - damageReceived} ❤️</CardText>
     </CardContainer>
+  );
+
+  if (zone === "hand") return cardContainer;
+
+  const isAttackingPlayer = app.gameData.hasControl === app.playerKey;
+  const yPosShouldMovePositive =
+    (isAttackingPlayer && isAttacking) || (!isAttackingPlayer && isBlocking);
+  let yPos = 0;
+  if (isAnimating) {
+    yPos = yPosShouldMovePositive ? 10 : -10;
+  }
+
+  return (
+    <Spring
+      config={config.wobbly}
+      to={{ transform: `translate(0px, ${yPos}px)` }}
+    >
+      {props => <div style={props}>{cardContainer}</div>}
+    </Spring>
   );
 });
 
@@ -154,6 +184,7 @@ const DraggableCard = observer(({ card, index, zone }) => {
         >
           <Card
             card={card}
+            zone={zone}
             isDraggable={isDraggable}
             isDragging={snapshot.isDragging}
           />
