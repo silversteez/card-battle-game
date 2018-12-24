@@ -613,10 +613,10 @@ export default class AppStore {
     );
   }
 
-  // @computed
-  // get showFindGameLobby() {
-  //   return !this.gameIsActive;
-  // }
+  @computed
+  get userIsLoaded() {
+    return !!this.userData.authType;
+  }
 
   @computed
   get showGame() {
@@ -624,16 +624,24 @@ export default class AppStore {
   }
 
   @computed
-  get userIsLookingForGame() {
+  get userMaySearchForNewGame() {
     return (
-      this.userData.state === USER.searching ||
-      this.userData.state === USER.attempt_reconnect
+      this.userIsLoaded &&
+      !this.showGame &&
+      !this.gameIsMatchmaking &&
+      (this.userData.state !== USER.searching ||
+        this.userData.state !== USER.attempt_reconnect)
     );
   }
 
   @computed
   get userIsInGame() {
-    return this.userData.state !== USER.menu && !this.userIsLookingForGame;
+    return (
+      this.userIsLoaded &&
+      this.userData.state !== USER.menu &&
+      this.userData.state !== USER.searching &&
+      this.userData.state !== USER.attempt_reconnect
+    );
   }
 
   @computed

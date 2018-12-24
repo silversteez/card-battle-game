@@ -17,7 +17,7 @@ const AppContainer = styled.div`
 `;
 
 const StyledButton = styled(Button)`
-  margin: 0 8px;
+  margin: 8px;
 `;
 
 const UserId = observer(() => {
@@ -32,7 +32,7 @@ const UserId = observer(() => {
             onClick={app.concedeGame}
             disabled={app.isUpdatingGame}
           >
-            Concede
+            💀
           </StyledButton>
         )}
       </div>
@@ -329,9 +329,11 @@ const EnemyHand = observer(() => {
   return (
     <EnemyHandContainer>
       <Timer active={!app.hasControl} />
-      <Typography>Enemy: {app.enemyData.id}</Typography>
-      <Typography>{app.enemyData.life} Life️</Typography>
-      <Typography>{app.enemyData.hand.length} Cards️</Typography>
+      <div style={{padding: 8}}>
+        <Typography>Enemy: {app.enemyData.id}</Typography>
+        <Typography>{app.enemyData.life} Life️</Typography>
+        <Typography>{app.enemyData.hand.length} Cards️</Typography>
+      </div>
     </EnemyHandContainer>
   );
 });
@@ -362,10 +364,10 @@ const JSON = ({ json }) => {
 
 const Divider = () => <div style={{ marginBottom: 15 }} />;
 
-const Lobby = () => {
+const Lobby = observer(() => {
   return (
     <Fragment>
-      {app.userData.state === "searching" || app.gameIsMatchmaking ? (
+      {!app.userMaySearchForNewGame ? (
         <div>
           <Typography>Searching...</Typography>
         </div>
@@ -380,7 +382,7 @@ const Lobby = () => {
       )}
     </Fragment>
   );
-};
+});
 
 const TimerContainer = styled.div`
   opacity: ${props => (props.active ? 1 : 0)};
@@ -400,7 +402,7 @@ const Timer = observer(({ active }) => {
   );
 });
 
-const GameInfo = () => {
+const GameInfo = observer(() => {
   const disabled = app.isUpdatingGame;
   return (
     <Fragment>
@@ -423,7 +425,7 @@ const GameInfo = () => {
       )}
     </Fragment>
   );
-};
+});
 
 const App = observer(() => {
   return (
