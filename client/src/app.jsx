@@ -1,11 +1,12 @@
 import { observer } from "mobx-react";
+import { toJS } from "mobx";
 import React, { Fragment } from "react";
 import styled from "styled-components";
 import Button from "@material-ui/core/Button/Button";
 import Typography from "@material-ui/core/Typography/Typography";
 import LinearProgress from "@material-ui/core/LinearProgress/LinearProgress";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { Spring, config } from "react-spring";
+import { Spring, Keyframes, config, animated } from "react-spring";
 import AppStore from "./appStore";
 
 const app = new AppStore();
@@ -54,8 +55,9 @@ const CardText = styled(Typography)`
 
 const CardContainer = styled.div`
   background: ${props => {
-    if (props.card.isAttacking) return "red";
-    if (props.card.isBlocking) return "grey";
+    // if (props.card.isAttacking) return "red";
+    // if (props.card.isBlocking) return "grey";
+    if (props.isDragging) return "grey";
     return "#585858";
   }};
   width: 60px;
@@ -64,7 +66,8 @@ const CardContainer = styled.div`
   margin: 4px;
   cursor: ${props => (props.isDraggable ? "grab" : "pointer")};
   flex: 0 0 auto;
-  transition: background-color 1s;
+  transition: all 0.25s;
+  transform: ${props => (props.isDragging ? "scale(1.2)" : "none")};
   &:hover {
     background: #626262;
   }
@@ -91,7 +94,7 @@ const fieldStyles = {
   display: "flex",
   flexWrap: "nowrap",
   padding: 8,
-  height: 100,
+  height: 150,
   width: "100%",
   background: "#262626"
 };
@@ -119,9 +122,12 @@ const BothFieldsContainer = styled.div`
   background: #262626;
 `;
 
-const FieldContainer = styled.div(fieldStyles);
+const EnemyFieldContainer = styled.div({
+  ...fieldStyles,
+  alignItems: "flex-end"
+});
 
-const Card = observer(({ card, zone, isDraggable }) => {
+const Card = observer(({ card, zone, isDraggable, isDragging }) => {
   const {
     isAttacking,
     isBlocking,
@@ -137,6 +143,7 @@ const Card = observer(({ card, zone, isDraggable }) => {
     <CardContainer
       card={card}
       isDraggable={isDraggable}
+      isDragging={isDragging}
       onClick={() => app.onClickCard(card)}
     >
       <Typography>{cost} 💰</Typography>
@@ -145,7 +152,7 @@ const Card = observer(({ card, zone, isDraggable }) => {
     </CardContainer>
   );
 
-  if (zone === "hand") return cardContainer;
+  if (!app.phaseIsShowAttack || zone === "hand") return cardContainer;
 
   const isAttackingPlayer = app.gameData.hasControl === app.playerKey;
   const yPosShouldMovePositive =
@@ -155,13 +162,47 @@ const Card = observer(({ card, zone, isDraggable }) => {
     yPos = yPosShouldMovePositive ? 10 : -10;
   }
 
+  const Container = Keyframes.Spring({
+    static: { transform: "translate(0px,0px)" },
+    attackUp: [
+      {
+        from: { transform: "translate(0px,0px)" },
+        transform: "translate(0px, -50px)",
+        config: config.slow
+      },
+      {
+        transform: "translate(0px, 10px)",
+        config: { tension: 800, friction: 10, clamp: true }
+      },
+      { transform: "translate(0px,0px)", config: config.wobbly }
+    ],
+    attackDown: [
+      {
+        from: { transform: "translate(0px,0px)" },
+        transform: "translate(0px, 50px)",
+        config: config.slow
+      },
+      {
+        transform: "translate(0px, -10px)",
+        config: { tension: 800, friction: 10, clamp: true }
+      },
+      { transform: "translate(0px,0px)", config: config.wobbly }
+    ]
+  });
+
+  let state = "static";
+  if (isAnimating) {
+    if (yPosShouldMovePositive) {
+      state = "attackUp";
+    } else {
+      state = "attackDown";
+    }
+  }
+  // console.log("state is", state, toJS(card));
   return (
-    <Spring
-      config={config.wobbly}
-      to={{ transform: `translate(0px, ${yPos}px)` }}
-    >
-      {props => <div style={props}>{cardContainer}</div>}
-    </Spring>
+    <Container native state={state}>
+      {props => <animated.div style={props}>{cardContainer}</animated.div>}
+    </Container>
   );
 });
 
@@ -280,7 +321,7 @@ const Field = observer(({ playerData }) => {
   const cards = playerData.field.map(card => {
     return <Card key={card.name} card={card} />;
   });
-  return <FieldContainer>{cards}</FieldContainer>;
+  return <EnemyFieldContainer>{cards}</EnemyFieldContainer>;
 });
 
 const EnemyHand = observer(() => {
@@ -393,14 +434,17 @@ const App = observer(() => {
       >
         <UserId />
         <Divider />
-        {app.gameIsActive || app.gameIsComplete ? null : <Lobby />}
-        <Divider />
-        <EnemyHand />
-        <BothFieldsContainer>
-          <Field playerData={app.enemyData} />
-          <DroppablePlayerFieldArea />
-        </BothFieldsContainer>
-        <Hand />
+        {!app.showGame && <Lobby />}
+        {app.showGame && (
+          <Fragment>
+            <EnemyHand />
+            <BothFieldsContainer>
+              <Field playerData={app.enemyData} />
+              <DroppablePlayerFieldArea />
+            </BothFieldsContainer>
+            <Hand />
+          </Fragment>
+        )}
       </DragDropContext>
     </AppContainer>
   );

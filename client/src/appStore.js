@@ -286,7 +286,6 @@ export default class AppStore {
     }
   }
 
-
   // BOTH players calculate and animate the attacks locally and then compare results on the server and if
   // they don't match, then we know there is a cheater... an idea to try out...
   @action.bound
@@ -323,20 +322,18 @@ export default class AppStore {
         if (blockingCard && blockingCard.willBlock) {
           // Enable blocking visuals
           blockingCard.isBlocking = true;
-          await delay(1000);
+          // Stop visuals
+          await delay(2000);
+          card.isAttacking = false;
+          blockingCard.isBlocking = false;
           // Damage calc
           blockingCard.damageReceived += card.attack;
           card.damageReceived += blockingCard.attack;
-          await delay(1000);
-          // Update visuals
-          this.resetCard(blockingCard);
-          this.resetCard(card);
         } else {
-          await delay(1000);
+          // Stop visuals and calc player damage
+          await delay(2000);
+          card.isAttacking = false;
           damageToPlayer = damageToPlayer + card.attack;
-          await delay(1000);
-          // Update visuals
-          this.resetCard(card);
         }
         console.log(`card ${i} attacked`);
         await delay(1000);
@@ -392,8 +389,8 @@ export default class AppStore {
       console.log(`${this.playerKey} is updating gameRef`);
       console.log(`blockingPlayerKey - ${blockingPlayerKey}`);
       console.log(`attackingPlayerKey - ${attackingPlayerKey}`);
-      console.log(`blockingPlayerData - `,toJS(blockingPlayerData));
-      console.log(`attackingPlayerData - `,toJS(attackingPlayerData));
+      console.log(`blockingPlayerData - `, toJS(blockingPlayerData));
+      console.log(`attackingPlayerData - `, toJS(attackingPlayerData));
       this.gameRef.update({
         phase,
         round,
@@ -616,10 +613,34 @@ export default class AppStore {
     );
   }
 
+  // @computed
+  // get showFindGameLobby() {
+  //   return !this.gameIsActive;
+  // }
+
+  @computed
+  get showGame() {
+    return this.gameIsActive || this.gameIsComplete;
+  }
+
+  @computed
+  get userIsLookingForGame() {
+    return (
+      this.userData.state === USER.searching ||
+      this.userData.state === USER.attempt_reconnect
+    );
+  }
+
+  @computed
+  get userIsInGame() {
+    return this.userData.state !== USER.menu && !this.userIsLookingForGame;
+  }
+
   @computed
   get gameIsActive() {
     // Player ids ensures we're not still matchmaking
     return (
+      this.userIsInGame &&
       this.gameData.state === GAME.active &&
       this.playerData &&
       this.playerData.id &&
@@ -751,6 +772,11 @@ export default class AppStore {
   @computed
   get jsGameData() {
     return toJS(this.gameData);
+  }
+
+  @computed
+  get jsUserData() {
+    return toJS(this.userData);
   }
 }
 
