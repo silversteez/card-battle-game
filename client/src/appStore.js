@@ -203,6 +203,13 @@ export default class AppStore {
       return;
     }
 
+    // If there is an update that hasn't been committed, just do that
+    // Only doing this for player that hasControl so both don't do it...
+    // might need to read that in transaction to be sure they both don't do it?
+    if (!this.hasControl && this.gameData.gameUpdateToCommit) {
+      return this.onGameUpdateToCommit();
+    }
+
     // Check for draw card steps
     if (this.gameData.round === 0 && this.playerData.hand.length === 0) {
       // Draw initial hand
@@ -217,6 +224,118 @@ export default class AppStore {
     if (this.gameData.phase === PHASE.show_attack) {
       this.showAttackSequence();
     }
+  }
+
+  // TODO do both players run this? currently just adding explicit call to this after each place where 1 player would've udpated gameUpdateToCommit
+  // TODO put time update on server?
+  async onGameUpdateToCommit() {
+    return await this.db.runTransaction(async trs => {
+      const gameSnapshot = await trs.get(this.gameRef);
+      let gameData;
+      if (gameSnapshot.exists) {
+        gameData = gameSnapshot.data();
+      } else {
+        return Promise.reject('No gameSnaphot was found, exiting transaction...');
+      }
+      const transactions = [];
+      const update = gameData.gameUpdateToCommit;
+      const playerKey = gameData.hasControl;
+      const enemyKey = playerKey === "player1" ? "player2" : "player1";
+      const playerData = gameData[playerKey];
+      const enemyData = gameData[enemyKey];
+      const history = gameData.history;
+      let state = gameData.state;
+      let controlTimeOut = gameData.controlTimeOut;
+      let round = gameData.round;
+      let phase = gameData.phase;
+
+      // Update swapControl when needed
+      let swapControl = false;
+      let hasControl = this.gameData.hasControl;
+
+      if (update.action === ACTIONS.pass_turn) {
+        swapControl = true;
+      }
+
+      if (update.action === ACTIONS.exit_game) {
+        playerData.didExit = true;
+      }
+
+      // Update control
+      if (swapControl) {
+        const swapControlMap = {
+          player1: "player2",
+          player2: "player1"
+        };
+        hasControl = swapControlMap[hasControl];
+        const controlTimeLimit = 40;
+        const date = new Date();
+        enemyData.mana = round < 10 ? round : 10;
+        round++;
+        phase = PHASE.pre_attack;
+        controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
+        // Reset field state
+        playerData.field.forEach(card => (card.willAttack = false));
+        enemyData.field.forEach(card => (card.willAttack = false));
+      }
+
+      // Update history
+      update.player = playerKey;
+      history.push(update);
+
+      // Check for game end
+      if (
+        state !== GAME.complete &&
+        (playerData.life <= 0 || enemyData.life <= 0)
+      ) {
+        state = GAME.complete;
+        playerData.didWin = playerData.life > 0;
+        enemyData.didWin = enemyData.life > 0;
+        transactions.push(
+          trs.update(this.db.collection("users").doc(playerData.id), {
+            state: playerData.didWin ? "game_victory" : "game_loss"
+          })
+        );
+        transactions.push(
+          trs.update(this.db.collection("users").doc(enemyData.id), {
+            state: enemyData.didWin ? "game_victory" : "game_loss"
+          })
+        );
+      }
+
+      // Check for game end
+      else if (state !== "complete" && update.action === "concede") {
+        state = GAME.complete;
+        playerData.didWin = false;
+        enemyData.didWin = true;
+        transactions.push(
+          trs.update(this.db.collection("users").doc(playerData.id), {
+            state: "game_loss"
+          })
+        );
+        transactions.push(
+          trs.update(this.db.collection("users").doc(enemyData.id), {
+            state: "game_victory"
+          })
+        );
+      }
+
+      transactions.push(
+        trs.update(this.gameRef, {
+          player1: playerKey === "player1" ? playerData : enemyData,
+          player2: playerKey === "player2" ? playerData : enemyData,
+          hasControl,
+          controlTimeOut,
+          history,
+          state,
+          round,
+          phase,
+          gameUpdateToCommit: null
+        })
+      );
+
+      return Promise.all(transactions);
+    });
   }
 
   @action.bound
@@ -235,6 +354,7 @@ export default class AppStore {
     console.log("user snapshot:", toJS(this.userData));
   }
 
+  // TODO may eventually need transaction to prevent me joining game from 2 of my devices simultaneously :)
   async attemptReconnectToGame() {
     // Find an active game I'm already in...
     let gameQuerySnapshot = await this.gamesRef
@@ -252,7 +372,6 @@ export default class AppStore {
         gameId: gameId,
         state: USER.found_game,
       });
-
       return true;
     }
     return false;
@@ -520,6 +639,9 @@ export default class AppStore {
         gameUpdateToCommit
       });
     }
+    if (gameUpdateToCommit) {
+      this.onGameUpdateToCommit();
+    }
   }
 
   @action.bound
@@ -664,13 +786,14 @@ export default class AppStore {
     // request end of turn
     if (this.controlTimeRemaining <= 0) {
       // TODO to make this unhackable, switch logic to enemy requests turn end
-      if (this.hasControl && !this.isUpdatingGame) {
+      if (!this.hasControl) {
         console.log("time up! passing turn...");
         this.gameRef.update({
           gameUpdateToCommit: {
             action: ACTIONS.pass_turn
           }
         });
+        this.onGameUpdateToCommit();
       }
       return;
     }
@@ -872,6 +995,7 @@ export default class AppStore {
         action: ACTIONS.exit_game
       }
     });
+    this.onGameUpdateToCommit();
   }
 
   @action.bound
@@ -881,6 +1005,7 @@ export default class AppStore {
         action: ACTIONS.pass_turn
       }
     });
+    this.onGameUpdateToCommit();
   }
 
   @action.bound
@@ -890,6 +1015,7 @@ export default class AppStore {
         action: ACTIONS.concede
       }
     });
+    this.onGameUpdateToCommit();
   }
 
   @action.bound
