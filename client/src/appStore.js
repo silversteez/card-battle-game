@@ -49,6 +49,7 @@ export default class AppStore {
   @observable lastControlTimeout = null;
   @observable controlTimeRemaining = null;
   lastRound = 0; // Compare lastRound to round to know when to draw a card
+  db = null;
 
   constructor() {
     // Initialize Firebase
@@ -67,13 +68,13 @@ export default class AppStore {
     }
 
     // Settings
-    const db = firebase.firestore();
     const settings = { timestampsInSnapshots: true };
-    db.settings(settings);
+    this.db = firebase.firestore();
+    this.db.settings(settings);
 
     // db refs
-    this.usersRef = db.collection("users");
-    this.gamesRef = db.collection("games");
+    this.usersRef = this.db.collection("users");
+    this.gamesRef = this.db.collection("games");
 
     // AUTH
     firebase.auth().onAuthStateChanged(this.onAuthStateChange);
@@ -121,6 +122,9 @@ export default class AppStore {
 
         // Keep userData updated
         this.subscribeToUser();
+
+        // Actually attempt reconnect
+        // this.onUserSearchForGame();
       } catch (e) {
         console.log(e);
       }
@@ -176,6 +180,7 @@ export default class AppStore {
   @action.bound
   onGameSnapshot(doc) {
     this.gameData = doc.data();
+    console.log("game snapshot:", toJS(this.gameData));
 
     // Check for broken game state...
     if (
@@ -212,8 +217,6 @@ export default class AppStore {
     if (this.gameData.phase === PHASE.show_attack) {
       this.showAttackSequence();
     }
-
-    //console.log("gameData is", toJS(this.gameData));
   }
 
   @action.bound
@@ -229,7 +232,123 @@ export default class AppStore {
   @action.bound
   onUserSnapshot(doc) {
     this.userData = doc.data();
-    //console.log("userData is", toJS(this.userData));
+    console.log("user snapshot:", toJS(this.userData));
+  }
+
+  async attemptReconnectToGame() {
+    // Find an active game I'm already in...
+    let gameQuerySnapshot = await this.gamesRef
+      .where("users", "array-contains", this.userId)
+      .where("state", "==", GAME.active)
+      .limit(1)
+      .get();
+    if (!gameQuerySnapshot.emtpy) {
+      // Whether searching or attempting reconnect
+      // If found game, update my state and exit
+      const gameId = gameQuerySnapshot.docs[0].id;
+      console.log(`FOUND GAME!`);
+      //  add a reference to the game in the player document
+      this.userRef.update({
+        gameId: gameId,
+        state: USER.found_game,
+      });
+
+      return true;
+    }
+    return false;
+  }
+
+  async onUserSearchForGame() {
+    return await this.db.runTransaction(async trs => {
+      try {
+        const userId = this.userId;
+        const userDoc = await trs.get(this.userRef);
+        const userData = userDoc.data();
+
+        // Find an active game that needs player2
+        let gameQuerySnapshot = await this.gamesRef
+          .where("full", "==", false)
+          .where("state", "==", GAME.active)
+          .limit(1)
+          .get();
+
+        let gameId;
+        let transactions = [];
+        if (gameQuerySnapshot.docs[0]) {
+          // A game was found, add the player to it
+          const gameSnapshot = await trs.get(gameQuerySnapshot.docs[0].ref);
+          // const gameSnapshot = gameResult.docs[0];
+          const game = gameSnapshot.data();
+          const users = game.users.concat([userId]);
+          const full = users.length === 2;
+          const player2 = Object.assign(game.player2, {
+            id: userId,
+            deck: userData.deck
+          });
+          const controlTimeLimit = 40;
+          const date = new Date();
+          const newGameData = {
+            full,
+            users,
+            player2,
+            controlTimeLimit,
+            controlTimeOut: date.setSeconds(
+              date.getSeconds() + controlTimeLimit
+            ),
+            state: GAME.active
+          };
+          transactions.push(trs.update(gameSnapshot.ref, newGameData));
+          gameId = gameSnapshot.id;
+          console.log(`User: ${userId}, joined game`);
+        } else {
+          // No game was found, create a new game with the player
+          const users = [userId];
+          const gameRef = this.db.collection("games").doc();
+          transactions.push(
+            trs.set(gameRef, {
+              full: false,
+              users: users,
+              hasControl: "player1",
+              round: 0,
+              phase: PHASE.pre_attack,
+              controlTimeLimit: null,
+              controlTimeOut: null,
+              player1: {
+                id: userId,
+                life: 30,
+                mana: 1,
+                deck: userData.deck,
+                hand: [],
+                field: []
+              },
+              player2: {
+                id: null,
+                life: 30,
+                mana: 1,
+                deck: null,
+                hand: [],
+                field: []
+              },
+              history: [],
+              state: GAME.active,
+              gameUpdateToCommit: null
+            })
+          );
+          gameId = gameRef.id;
+          console.log(`User: ${userId}, created game`);
+        }
+        // then add a reference to the game in the player document
+        transactions.push(
+          trs.update(this.userRef, {
+            gameId: gameId,
+            state: USER.found_game
+          })
+        );
+        return Promise.all(transactions);
+      } catch (e) {
+        console.log("fail!", e);
+      }
+    });
   }
 
   @action.bound
@@ -723,10 +842,14 @@ export default class AppStore {
   }
 
   @action.bound
-  findGame() {
+  async findGame() {
     this.userRef.update({
       state: USER.searching
     });
+    const foundGame = await this.attemptReconnectToGame();
+    if (!foundGame) {
+      this.onUserSearchForGame();
+    }
   }
 
   // TODO update to concede
