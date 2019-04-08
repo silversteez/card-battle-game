@@ -10,6 +10,11 @@ function randomInt(min, max) {
 
 const delay = ms => new Promise(res => setTimeout(() => res(), ms));
 
+const animDelayFactor = 2; // Change to larger number like 10 for slower attack sequence...
+
+// TODO crazy stuff happens on turn time out transition...
+const PLAYER_TURN_TIME_S = 10;
+
 class Deck {
   cards = [];
   maxSize = 60;
@@ -124,7 +129,7 @@ export default class AppStore {
         this.subscribeToUser();
 
         // Actually attempt reconnect
-        // this.onUserSearchForGame();
+        this.attemptReconnectToGame();
       } catch (e) {
         console.log(e);
       }
@@ -229,113 +234,122 @@ export default class AppStore {
   // TODO do both players run this? currently just adding explicit call to this after each place where 1 player would've udpated gameUpdateToCommit
   // TODO put time update on server?
   async onGameUpdateToCommit() {
-    return await this.db.runTransaction(async trs => {
-      const gameSnapshot = await trs.get(this.gameRef);
-      let gameData;
-      if (gameSnapshot.exists) {
-        gameData = gameSnapshot.data();
-      } else {
-        return Promise.reject('No gameSnaphot was found, exiting transaction...');
-      }
-      const transactions = [];
-      const update = gameData.gameUpdateToCommit;
-      const playerKey = gameData.hasControl;
-      const enemyKey = playerKey === "player1" ? "player2" : "player1";
-      const playerData = gameData[playerKey];
-      const enemyData = gameData[enemyKey];
-      const history = gameData.history;
-      let state = gameData.state;
-      let controlTimeOut = gameData.controlTimeOut;
-      let round = gameData.round;
-      let phase = gameData.phase;
+    try {
+      return await this.db.runTransaction(async trs => {
+        const gameSnapshot = await trs.get(this.gameRef);
+        let gameData;
+        let update;
+        if (gameSnapshot.exists) {
+          gameData = gameSnapshot.data();
+          if (gameData.gameUpdateToCommit) {
+            update = gameData.gameUpdateToCommit;
+          } else {
+            return Promise.reject('game.update was null, exiting transaction...');
+          }
+        } else {
+          return Promise.reject('No gameSnaphot was found, exiting transaction...');
+        }
+        const transactions = [];
+        const playerKey = gameData.hasControl;
+        const enemyKey = playerKey === "player1" ? "player2" : "player1";
+        const playerData = gameData[playerKey];
+        const enemyData = gameData[enemyKey];
+        const history = gameData.history;
+        let state = gameData.state;
+        let controlTimeOut = gameData.controlTimeOut;
+        let round = gameData.round;
+        let phase = gameData.phase;
 
-      // Update swapControl when needed
-      let swapControl = false;
-      let hasControl = this.gameData.hasControl;
+        // Update swapControl when needed
+        let swapControl = false;
+        let hasControl = gameData.hasControl;
 
-      if (update.action === ACTIONS.pass_turn) {
-        swapControl = true;
-      }
+        if (update.action === ACTIONS.pass_turn) {
+          swapControl = true;
+        }
 
-      if (update.action === ACTIONS.exit_game) {
-        playerData.didExit = true;
-      }
+        if (update.action === ACTIONS.exit_game) {
+          playerData.didExit = true;
+        }
 
-      // Update control
-      if (swapControl) {
-        const swapControlMap = {
-          player1: "player2",
-          player2: "player1"
-        };
-        hasControl = swapControlMap[hasControl];
-        const controlTimeLimit = 40;
-        const date = new Date();
-        enemyData.mana = round < 10 ? round : 10;
-        round++;
-        phase = PHASE.pre_attack;
-        controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
-        // Reset field state
-        playerData.field.forEach(card => (card.willAttack = false));
-        enemyData.field.forEach(card => (card.willAttack = false));
-      }
+        // Update control
+        if (swapControl) {
+          const swapControlMap = {
+            player1: "player2",
+            player2: "player1"
+          };
+          hasControl = swapControlMap[hasControl];
+          const controlTimeLimit = PLAYER_TURN_TIME_S;
+          const date = new Date();
+          enemyData.mana = round < 10 ? round : 10;
+          round++;
+          phase = PHASE.pre_attack;
+          controlTimeOut = date.setSeconds(date.getSeconds() + controlTimeLimit);
+          // Reset field state
+          playerData.field.forEach(card => (card.willAttack = false));
+          enemyData.field.forEach(card => (card.willAttack = false));
+        }
 
-      // Update history
-      update.player = playerKey;
-      history.push(update);
+        // Update history
+        update.player = playerKey;
+        history.push(update);
 
-      // Check for game end
-      if (
-        state !== GAME.complete &&
-        (playerData.life <= 0 || enemyData.life <= 0)
-      ) {
-        state = GAME.complete;
-        playerData.didWin = playerData.life > 0;
-        enemyData.didWin = enemyData.life > 0;
+        // Check for game end
+        if (
+          state !== GAME.complete &&
+          (playerData.life <= 0 || enemyData.life <= 0)
+        ) {
+          state = GAME.complete;
+          playerData.didWin = playerData.life > 0;
+          enemyData.didWin = enemyData.life > 0;
+          transactions.push(
+            trs.update(this.db.collection("users").doc(playerData.id), {
+              state: playerData.didWin ? "game_victory" : "game_loss"
+            })
+          );
+          transactions.push(
+            trs.update(this.db.collection("users").doc(enemyData.id), {
+              state: enemyData.didWin ? "game_victory" : "game_loss"
+            })
+          );
+        }
+
+        // Check for game end
+        else if (state !== "complete" && update.action === "concede") {
+          state = GAME.complete;
+          playerData.didWin = false;
+          enemyData.didWin = true;
+          transactions.push(
+            trs.update(this.db.collection("users").doc(playerData.id), {
+              state: "game_loss"
+            })
+          );
+          transactions.push(
+            trs.update(this.db.collection("users").doc(enemyData.id), {
+              state: "game_victory"
+            })
+          );
+        }
+
         transactions.push(
-          trs.update(this.db.collection("users").doc(playerData.id), {
-            state: playerData.didWin ? "game_victory" : "game_loss"
+          trs.update(this.gameRef, {
+            player1: playerKey === "player1" ? playerData : enemyData,
+            player2: playerKey === "player2" ? playerData : enemyData,
+            hasControl,
+            controlTimeOut,
+            history,
+            state,
+            round,
+            phase,
+            gameUpdateToCommit: null
           })
         );
-        transactions.push(
-          trs.update(this.db.collection("users").doc(enemyData.id), {
-            state: enemyData.didWin ? "game_victory" : "game_loss"
-          })
-        );
-      }
 
-      // Check for game end
-      else if (state !== "complete" && update.action === "concede") {
-        state = GAME.complete;
-        playerData.didWin = false;
-        enemyData.didWin = true;
-        transactions.push(
-          trs.update(this.db.collection("users").doc(playerData.id), {
-            state: "game_loss"
-          })
-        );
-        transactions.push(
-          trs.update(this.db.collection("users").doc(enemyData.id), {
-            state: "game_victory"
-          })
-        );
-      }
-
-      transactions.push(
-        trs.update(this.gameRef, {
-          player1: playerKey === "player1" ? playerData : enemyData,
-          player2: playerKey === "player2" ? playerData : enemyData,
-          hasControl,
-          controlTimeOut,
-          history,
-          state,
-          round,
-          phase,
-          gameUpdateToCommit: null
-        })
-      );
-
-      return Promise.all(transactions);
-    });
+        return Promise.all(transactions);
+      });
+    } catch (e) {
+      console.log(e);
+    }
   }
 
   @action.bound
@@ -362,7 +376,7 @@ export default class AppStore {
       .where("state", "==", GAME.active)
       .limit(1)
       .get();
-    if (!gameQuerySnapshot.emtpy) {
+    if (gameQuerySnapshot.docs[0]) {
       // Whether searching or attempting reconnect
       // If found game, update my state and exit
       const gameId = gameQuerySnapshot.docs[0].id;
@@ -404,7 +418,7 @@ export default class AppStore {
             id: userId,
             deck: userData.deck
           });
-          const controlTimeLimit = 40;
+          const controlTimeLimit = PLAYER_TURN_TIME_S;
           const date = new Date();
           const newGameData = {
             full,
@@ -493,7 +507,7 @@ export default class AppStore {
         // Just pass control to enemy
         const hasControl = this.enemyKey;
         const phase = PHASE.pre_attack;
-        const controlTimeLimit = 40;
+        const controlTimeLimit = PLAYER_TURN_TIME_S;
         const date = new Date();
         const controlTimeOut = date.setSeconds(
           date.getSeconds() + controlTimeLimit
@@ -546,7 +560,7 @@ export default class AppStore {
     }
 
     console.log("starting sequence...");
-    await delay(1000);
+    await delay(100 * animDelayFactor);
 
     // Calc attack damage
     let damageToPlayer = 0;
@@ -561,7 +575,7 @@ export default class AppStore {
           // Enable blocking visuals
           blockingCard.isBlocking = true;
           // Stop visuals
-          await delay(2000);
+          await delay(200 * animDelayFactor);
           card.isAttacking = false;
           blockingCard.isBlocking = false;
           // Damage calc
@@ -569,17 +583,17 @@ export default class AppStore {
           card.damageReceived += blockingCard.attack;
         } else {
           // Stop visuals and calc player damage
-          await delay(2000);
+          await delay(200 * animDelayFactor);
           card.isAttacking = false;
           damageToPlayer = damageToPlayer + card.attack;
         }
         console.log(`card ${i} attacked`);
-        await delay(1000);
+        await delay(100 * animDelayFactor);
       }
     }
 
     console.log(`remove dead cards`);
-    await delay(1000);
+    await delay(100 * animDelayFactor);
     // Remove dead cards
     attackingPlayerData.field = attackingPlayerData.field.filter(
       card => card.damageReceived < card.health
@@ -589,7 +603,7 @@ export default class AppStore {
     );
 
     console.log("adjust player life");
-    await delay(1000);
+    await delay(100 * animDelayFactor);
     blockingPlayerData.life = blockingPlayerData.life - damageToPlayer;
 
     // Increase mana for next round
@@ -598,7 +612,7 @@ export default class AppStore {
 
     // Set phase and KEEP control (for now)
     const phase = PHASE.pre_attack;
-    const controlTimeLimit = 40;
+    const controlTimeLimit = PLAYER_TURN_TIME_S;
     const date = new Date();
     const controlTimeOut = date.setSeconds(
       date.getSeconds() + controlTimeLimit
@@ -610,7 +624,7 @@ export default class AppStore {
     attackingPlayerData.field.forEach(this.resetCard);
 
     console.log("field reset");
-    await delay(1000);
+    await delay(100 * animDelayFactor);
 
     // Check for dead players
     let gameUpdateToCommit = null;
@@ -629,7 +643,8 @@ export default class AppStore {
       console.log(`attackingPlayerKey - ${attackingPlayerKey}`);
       console.log(`blockingPlayerData - `, toJS(blockingPlayerData));
       console.log(`attackingPlayerData - `, toJS(attackingPlayerData));
-      this.gameRef.update({
+      // awaiting here to make sure this resolves before onGameUpdateToCommit runs
+      await this.gameRef.update({
         phase,
         round,
         controlTimeOut,
@@ -770,6 +785,11 @@ export default class AppStore {
 
     // Animating attacks, ignore timer
     if (this.gameData.phase === PHASE.show_attack) {
+      return;
+    }
+
+    // Game is complete, ignore timer
+    if (this.gameData.state === GAME.complete) {
       return;
     }
 
@@ -985,12 +1005,12 @@ export default class AppStore {
   }
 
   @action.bound
-  exitCompleteGame() {
-    this.userRef.update({
+  async exitCompleteGame() {
+    await this.userRef.update({
       state: USER.menu,
       gameId: null
     });
-    this.gameRef.update({
+    await this.gameRef.update({
       gameUpdateToCommit: {
         action: ACTIONS.exit_game
       }
@@ -999,8 +1019,8 @@ export default class AppStore {
   }
 
   @action.bound
-  passTurn() {
-    this.gameRef.update({
+  async passTurn() {
+    await this.gameRef.update({
       gameUpdateToCommit: {
         action: ACTIONS.pass_turn
       }
@@ -1009,8 +1029,8 @@ export default class AppStore {
   }
 
   @action.bound
-  concedeGame() {
-    this.gameRef.update({
+  async concedeGame() {
+    await this.gameRef.update({
       gameUpdateToCommit: {
         action: ACTIONS.concede
       }
