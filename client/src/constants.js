@@ -7,7 +7,9 @@ export const USER = {
   menu: "menu",
   searching: "searching",
   attempt_reconnect: "attempt_reconnect",
-  found_game: "found_game"
+  found_game: "found_game",
+  game_victory: "game_victory",
+  game_loss: "game_loss"
 };
 
 export const ACTIONS = {

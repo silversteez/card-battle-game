@@ -12,8 +12,12 @@ const delay = ms => new Promise(res => setTimeout(() => res(), ms));
 
 const animDelayFactor = 2; // Change to larger number like 10 for slower attack sequence...
 
-// TODO crazy stuff happens on turn time out transition...
+// TODO not all big changes go through onGameUpdateToCommit
+// - see onConfirm, showAttackSequence, and fix corrupt game in onGameSnapshot 
+// TODO pull swapcontrol code out into separate function?
 const PLAYER_TURN_TIME_S = 10;
+const PLAYER1 = "player1";
+const PLAYER2 = "player2";
 
 class Deck {
   cards = [];
@@ -158,7 +162,7 @@ export default class AppStore {
     this.unsubToGame = this.gameRef.onSnapshot(this.onGameSnapshot);
   };
 
-  updateGameOnServer = () => {
+  updateGamePlayerData = () => {
     if (!this.gameRef) return;
     const p1 = this.gameData.player1;
     const p2 = this.gameData.player2;
@@ -251,7 +255,7 @@ export default class AppStore {
         }
         const transactions = [];
         const playerKey = gameData.hasControl;
-        const enemyKey = playerKey === "player1" ? "player2" : "player1";
+        const enemyKey = playerKey === PLAYER1 ? PLAYER2 : PLAYER1;
         const playerData = gameData[playerKey];
         const enemyData = gameData[enemyKey];
         const history = gameData.history;
@@ -275,8 +279,8 @@ export default class AppStore {
         // Update control
         if (swapControl) {
           const swapControlMap = {
-            player1: "player2",
-            player2: "player1"
+            player1: PLAYER2,
+            player2: PLAYER1
           };
           hasControl = swapControlMap[hasControl];
           const controlTimeLimit = PLAYER_TURN_TIME_S;
@@ -303,38 +307,38 @@ export default class AppStore {
           playerData.didWin = playerData.life > 0;
           enemyData.didWin = enemyData.life > 0;
           transactions.push(
-            trs.update(this.db.collection("users").doc(playerData.id), {
-              state: playerData.didWin ? "game_victory" : "game_loss"
+            trs.update(this.usersRef.doc(playerData.id), {
+              state: playerData.didWin ? USER.game_victory : USER.game_loss
             })
           );
           transactions.push(
-            trs.update(this.db.collection("users").doc(enemyData.id), {
-              state: enemyData.didWin ? "game_victory" : "game_loss"
+            trs.update(this.usersRef.doc(enemyData.id), {
+              state: enemyData.didWin ? USER.game_victory : USER.game_loss
             })
           );
         }
 
         // Check for game end
-        else if (state !== "complete" && update.action === "concede") {
+        else if (state !== GAME.complete && update.action === ACTIONS.concede) {
           state = GAME.complete;
           playerData.didWin = false;
           enemyData.didWin = true;
           transactions.push(
-            trs.update(this.db.collection("users").doc(playerData.id), {
-              state: "game_loss"
+            trs.update(this.usersRef.doc(playerData.id), {
+              state: USER.game_loss
             })
           );
           transactions.push(
-            trs.update(this.db.collection("users").doc(enemyData.id), {
-              state: "game_victory"
+            trs.update(this.usersRef.doc(enemyData.id), {
+              state: USER.game_victory
             })
           );
         }
 
         transactions.push(
           trs.update(this.gameRef, {
-            player1: playerKey === "player1" ? playerData : enemyData,
-            player2: playerKey === "player2" ? playerData : enemyData,
+            player1: playerKey === PLAYER1 ? playerData : enemyData,
+            player2: playerKey === PLAYER2 ? playerData : enemyData,
             hasControl,
             controlTimeOut,
             history,
@@ -359,7 +363,7 @@ export default class AppStore {
       ...this.playerData.deck.slice(0, numCards)
     ];
     this.playerData.deck = this.playerData.deck.slice(numCards);
-    this.updateGameOnServer();
+    this.updateGamePlayerData();
   }
 
   @action.bound
@@ -441,7 +445,7 @@ export default class AppStore {
             trs.set(gameRef, {
               full: false,
               users: users,
-              hasControl: "player1",
+              hasControl: PLAYER1,
               round: 0,
               phase: PHASE.pre_attack,
               controlTimeLimit: null,
@@ -637,7 +641,7 @@ export default class AppStore {
 
     console.log("attack sequence completed by:", this.playerKey);
     // For now, skip server cheating verification and just send results from player1
-    if (this.playerKey === "player1") {
+    if (this.playerKey === PLAYER1) {
       console.log(`${this.playerKey} is updating gameRef`);
       console.log(`blockingPlayerKey - ${blockingPlayerKey}`);
       console.log(`attackingPlayerKey - ${attackingPlayerKey}`);
@@ -690,12 +694,12 @@ export default class AppStore {
     if (this.playerData.field.includes(card)) {
       if (this.gameData.phase === PHASE.pre_attack) {
         card.willAttack = !card.willAttack;
-        this.updateGameOnServer();
+        this.updateGamePlayerData();
         return;
       }
       if (this.gameData.phase === PHASE.block) {
         card.willBlock = !card.willBlock;
-        this.updateGameOnServer();
+        this.updateGamePlayerData();
       }
     }
   }
@@ -775,7 +779,7 @@ export default class AppStore {
   }
 
   @action.bound
-  decrementTimeRemaining() {
+  async decrementTimeRemaining() {
     // Not in a game, return
     if (!this.gameData.controlTimeOut) {
       this.lastControlTimeout = null;
@@ -806,9 +810,9 @@ export default class AppStore {
     // request end of turn
     if (this.controlTimeRemaining <= 0) {
       // TODO to make this unhackable, switch logic to enemy requests turn end
-      if (!this.hasControl) {
+      if (!this.hasControl && !this.isUpdatingGame) {
         console.log("time up! passing turn...");
-        this.gameRef.update({
+        await this.gameRef.update({
           gameUpdateToCommit: {
             action: ACTIONS.pass_turn
           }
@@ -849,19 +853,19 @@ export default class AppStore {
   @computed
   get playerKey() {
     if (this.playerData === this.gameData.player1) {
-      return "player1";
+      return PLAYER1;
     } else if (this.playerData === this.gameData.player2) {
-      return "player2";
+      return PLAYER2;
     }
     return null;
   }
 
   @computed
   get enemyKey() {
-    if (this.playerKey === "player1") {
-      return "player2";
-    } else if (this.playerKey === "player2") {
-      return "player1";
+    if (this.playerKey === PLAYER1) {
+      return PLAYER2;
+    } else if (this.playerKey === PLAYER2) {
+      return PLAYER1;
     }
     return null;
   }
