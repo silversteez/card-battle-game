@@ -1,12 +1,11 @@
 import { observer } from "mobx-react";
-import { toJS } from "mobx";
 import React, { Fragment } from "react";
 import styled from "styled-components";
 import Button from "@material-ui/core/Button/Button";
 import Typography from "@material-ui/core/Typography/Typography";
 import LinearProgress from "@material-ui/core/LinearProgress/LinearProgress";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { Spring, Keyframes, config, animated } from "react-spring";
+import { Keyframes, config, animated } from "react-spring";
 import AppStore from "./appStore";
 
 const app = new AppStore();
@@ -32,7 +31,7 @@ const UserId = observer(() => {
             onClick={app.concedeGame}
             disabled={app.isUpdatingGame}
           >
-            💀
+            <span role="img" aria-label="skull">💀</span>
           </StyledButton>
         )}
       </div>
@@ -131,7 +130,6 @@ const Card = observer(({ card, zone, isDraggable, isDragging }) => {
   const {
     isAttacking,
     isBlocking,
-    name,
     attack,
     health,
     damageReceived,
@@ -146,9 +144,9 @@ const Card = observer(({ card, zone, isDraggable, isDragging }) => {
       isDragging={isDragging}
       onClick={() => app.onClickCard(card)}
     >
-      <Typography>{cost} 💰</Typography>
-      <Typography>{attack} 🗡️</Typography>
-      <CardText card={card}>{health - damageReceived} ❤️</CardText>
+      <Typography>{cost}<span role="img" aria-label="cost"> 💰</span></Typography>
+      <Typography>{attack}<span role="img" aria-label="attack"> 🗡</span></Typography>
+      <CardText card={card}>{health - damageReceived}<span role="img" aria-label="health"> ❤️</span></CardText>
     </CardContainer>
   );
 
@@ -157,10 +155,10 @@ const Card = observer(({ card, zone, isDraggable, isDragging }) => {
   const isAttackingPlayer = app.gameData.hasControl === app.playerKey;
   const yPosShouldMovePositive =
     (isAttackingPlayer && isAttacking) || (!isAttackingPlayer && isBlocking);
-  let yPos = 0;
-  if (isAnimating) {
-    yPos = yPosShouldMovePositive ? 10 : -10;
-  }
+  // let yPos = 0;
+  // if (isAnimating) {
+  //   yPos = yPosShouldMovePositive ? 10 : -10;
+  // }
 
   const Container = Keyframes.Spring({
     static: { transform: "translate(0px,0px)" },
@@ -341,7 +339,7 @@ const EnemyHand = observer(() => {
 const JSON = ({ json }) => {
   if (!json) return null;
   const nodes = [];
-  Object.entries(json).map(([a, b]) => {
+  Object.entries(json).forEach(([a, b]) => {
     if (typeof b === "object") {
       nodes.push(
         <div key={a}>
