@@ -3,6 +3,8 @@ import { observable, action, computed, autorun, toJS } from "mobx";
 import { GAME, USER, ACTIONS, PHASE } from "./constants";
 import uuid from "./uuid";
 
+// TEST!
+
 // min and max included
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1) + min);
